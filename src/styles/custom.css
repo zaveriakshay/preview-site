@@ -1,0 +1,236 @@
+:root {
+    /*
+      The default Starlight nav height is 3.5rem.
+      Our custom header has:
+      - Line 1: 12px + 48px + 12px = 72px (4.5rem)
+      - Line 2: 8px + 32px + 8px = 48px (3rem)  
+      Total: 120px = 7.5rem
+      We must override this variable so the main content and sidebar
+      are pushed down by the correct amount, fixing the overlap.
+    */
+    --sl-nav-height: 7.5rem;
+}
+
+/* FIXED LAYOUT SYSTEM FOR STARLIGHT STRUCTURE */
+
+/* Force body to use viewport height with fixed header/footer */
+html, body {
+    height: 100vh !important;
+    margin: 0 !important;
+    padding: 0 !important;
+    overflow: hidden !important;
+}
+
+/* Body uses flexbox for fixed header/footer layout */
+body {
+    display: flex !important;
+    flex-direction: column !important;
+}
+
+/* Fixed header at top */
+.site-header,
+header[data-astro-cid] {
+    flex-shrink: 0 !important;
+    position: relative !important;
+    z-index: 1000 !important;
+}
+
+/* Main content area takes remaining space */
+.page,
+[data-astro-cid] .page {
+    flex: 1 !important;
+    display: flex !important;
+    flex-direction: row !important;
+    overflow: hidden !important;
+    min-height: 0 !important;
+}
+
+/* Sidebar should be scrollable */
+.sidebar,
+.sidebar-pane,
+aside[data-astro-cid] {
+    width: var(--sl-sidebar-width, 18rem) !important;
+    overflow-y: auto !important;
+    overflow-x: hidden !important;
+    flex-shrink: 0 !important;
+    height: 100% !important;
+}
+
+/* Main content area should be scrollable */
+.main-frame,
+[data-astro-cid] .main-frame {
+    flex: 1 !important;
+    overflow-y: auto !important;
+    overflow-x: hidden !important;
+    height: 100% !important;
+    min-width: 0 !important;
+    position: relative !important;
+    z-index: 1 !important;
+}
+
+/* Content panel inside main frame */
+.content-panel,
+[data-astro-cid] .content-panel {
+    height: auto !important;
+    overflow: visible !important;
+    padding: 1rem !important;
+}
+
+/* Fixed footer at bottom */
+.site-footer,
+footer[data-astro-cid] {
+    flex-shrink: 0 !important;
+    position: relative !important;
+    margin-top: auto !important;
+}
+
+/* Ensure sidebar content scrolls properly */
+.sidebar-content,
+nav[data-astro-cid] {
+    overflow-y: auto !important;
+    overflow-x: hidden !important;
+    height: 100% !important;
+    padding: 1rem 0 !important;
+}
+
+/* Hide default scroll on html to prevent double scrollbars */
+html {
+    overflow: hidden !important;
+}
+
+/* Ensure main content doesn't create additional scroll */
+.sl-markdown-content,
+article,
+main {
+    overflow-x: hidden !important;
+    overflow-y: visible !important;
+    height: auto !important;
+}
+
+/* Cards and astro components should display properly */
+.card,
+.astro-card,
+[data-astro-cid] {
+    max-width: 100% !important;
+    overflow-x: hidden !important;
+}
+
+/* API Pages Specific Layout Rules */
+
+/* Ensure API pages using Layout.astro work with fixed layout */
+.page-layout {
+    height: 100vh !important;
+    display: flex !important;
+    flex-direction: column !important;
+    overflow: hidden !important;
+}
+
+/* API page header */
+.page-layout > header {
+    flex-shrink: 0 !important;
+    position: relative !important;
+    z-index: 1000 !important;
+}
+
+/* API page main content */
+.page-layout .main-content {
+    flex: 1 !important;
+    overflow-y: auto !important;
+    overflow-x: hidden !important;
+    min-height: 0 !important;
+    background: var(--sl-color-bg) !important;
+}
+
+/* API page footer */
+.page-layout > footer {
+    flex-shrink: 0 !important;
+    position: relative !important;
+}
+
+/* Scalar API container integration */
+.scalar-container {
+    height: 100% !important;
+    width: 100% !important;
+    overflow: hidden !important;
+}
+
+/* Override any conflicting Scalar styles for layout */
+.scalar-container .scalar-app {
+    height: 100% !important;
+    max-height: none !important;
+    overflow: hidden !important;
+}
+
+/* Responsive behavior for mobile */
+/* Hide title on changelog page */
+body[data-pathname*="/changelogs/"] .content-panel h1:first-of-type,
+body[data-pathname*="/changelogs/"] .sl-markdown-content h1:first-of-type {
+    display: none !important;
+}
+
+@media (max-width: 50rem) {
+    /* Starlight guide pages mobile */
+    body {
+        overflow-y: auto !important;
+        overflow-x: hidden !important;
+    }
+    
+    html {
+        overflow-y: auto !important;
+        overflow-x: hidden !important;
+    }
+    
+    .page,
+    [data-astro-cid] .page {
+        flex-direction: column !important;
+        overflow-y: auto !important;
+    }
+    
+    .sidebar,
+    .sidebar-pane,
+    aside[data-astro-cid] {
+        width: 100% !important;
+        height: auto !important;
+        max-height: 50vh !important;
+        position: relative !important;
+    }
+    
+    /* API pages mobile */
+    .page-layout {
+        height: auto !important;
+        min-height: 100vh !important;
+        overflow-y: auto !important;
+    }
+    
+    .page-layout .main-content {
+        overflow-y: visible !important;
+        height: auto !important;
+    }
+    
+    .scalar-container {
+        height: auto !important;
+        min-height: calc(100vh - 12rem) !important;
+        overflow-y: auto !important;
+    }
+}
+
+/* Ensure dropdown menus always appear above content */
+.dropdown-menu,
+.user-dropdown-menu,
+.search-results,
+.version-dropdown-menu {
+    z-index: 10001 !important;
+}
+
+/* Ensure header stays above content but below dropdowns */
+.site-header {
+    z-index: 1000 !important;
+}
+
+/* Ensure main content stays below header and dropdowns */
+.main-frame,
+.content-panel,
+.sl-container {
+    z-index: 1 !important;
+    position: relative !important;
+}
