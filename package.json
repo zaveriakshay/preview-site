@@ -1,0 +1,30 @@
+{
+  "name": "noqodi-astro-docs",
+  "type": "module",
+  "version": "0.0.1",
+  "scripts": {
+    "dev": "astro dev",
+    "start": "astro dev",
+    "build": "astro build",
+    "preview": "astro preview",
+    "astro": "astro"
+  },
+  "dependencies": {
+    "@astrojs/node": "^9.0.0",
+    "@astrojs/starlight": "^0.35.2",
+    "@astrojs/tailwind": "^6.0.2",
+    "@types/jsdom": "^21.1.7",
+    "@types/puppeteer": "^7.0.4",
+    "astro": "^5.12.6",
+    "docx": "^9.5.1",
+    "html-to-pdfmake": "^2.5.30",
+    "jsdom": "^26.1.0",
+    "jspdf": "^3.0.1",
+    "marked": "^16.1.2",
+    "pdfmake": "^0.2.20",
+    "puppeteer": "^24.15.0",
+    "sharp": "^0.34.3",
+    "tailwindcss": "^4.1.11",
+    "yaml": "^2.8.0"
+  }
+}
