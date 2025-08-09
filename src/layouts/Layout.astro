@@ -1,0 +1,192 @@
+---
+// src/layouts/Layout.astro
+// Layout for API pages with consistent header and footer
+import Header from '../components/Header.astro';
+import Footer from '../components/Footer.astro';
+
+export interface Props {
+    title: string;
+    lang?: string;
+}
+
+const { title, lang } = Astro.props;
+
+// Extract language from current path for footer, or use provided lang
+const currentPath = Astro.url.pathname;
+const pathParts = currentPath.split('/').filter(Boolean);
+const detectedLang = (pathParts[0] === 'en' || pathParts[0] === 'ar') ? pathParts[0] as 'en' | 'ar' : 'en';
+const language = lang || detectedLang;
+const isRTL = language === 'ar';
+const direction = isRTL ? 'rtl' : 'ltr';
+---
+
+<!DOCTYPE html>
+<html lang={language} dir={direction}>
+<head>
+    <meta charset="UTF-8" />
+    <meta name="description" content="Noqodi API Documentation" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
+    <title>{title}</title>
+    
+    <!-- Import custom CSS to ensure consistent header height -->
+    <link rel="stylesheet" href="/src/styles/custom.css" />
+    
+    <!-- Import Starlight's CSS variables for consistency -->
+    <style>
+        :root {
+            /* noqodi brand colors */
+            --sl-color-bg: #ffffff;
+            --sl-color-bg-sidebar: #f8fafc;
+            --sl-color-text: #1e293b;
+            --sl-color-text-invert: #64748b;
+            --sl-color-text-accent: #0f172a;
+            --sl-color-accent: #3b82f6;
+            --sl-color-accent-high: #1d4ed8;
+            --sl-color-accent-low: #eff6ff;
+            --sl-color-gray-3: #cbd5e1;
+            --sl-color-gray-4: #94a3b8;
+            --sl-color-gray-5: #64748b;
+            --sl-color-gray-6: #f1f5f9;
+            --sl-color-gray-7: #e2e8f0;
+            --sl-font-mono: 'SFMono-Regular', Consolas, 'Liberation Mono', Menlo, monospace;
+            
+            /* noqodi specific variables */
+            --noqodi-blue: #3b82f6;
+            --noqodi-blue-light: #eff6ff;
+            --noqodi-blue-dark: #1d4ed8;
+            --noqodi-text: #1e293b;
+            --noqodi-text-muted: #64748b;
+        }
+        
+        @media (prefers-color-scheme: dark) {
+            :root {
+                --sl-color-bg: #0f172a;
+                --sl-color-bg-sidebar: #1e293b;
+                --sl-color-text: #f1f5f9;
+                --sl-color-text-invert: #94a3b8;
+                --sl-color-text-accent: #f8fafc;
+                --sl-color-accent: #60a5fa;
+                --sl-color-accent-high: #3b82f6;
+                --sl-color-accent-low: #1e3a8a;
+                --sl-color-gray-3: #475569;
+                --sl-color-gray-4: #64748b;
+                --sl-color-gray-5: #94a3b8;
+                --sl-color-gray-6: #334155;
+                --sl-color-gray-7: #1e293b;
+            }
+        }
+        
+        * {
+            box-sizing: border-box;
+        }
+        
+        html {
+            height: 100vh;
+            margin: 0;
+            padding: 0;
+            overflow: hidden;
+            scroll-behavior: smooth;
+        }
+        
+        body {
+            height: 100vh;
+            margin: 0;
+            padding: 0;
+            font-family: system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            background: var(--sl-color-bg);
+            color: var(--sl-color-text);
+            line-height: 1.6;
+            overflow: hidden;
+            display: flex;
+            flex-direction: column;
+        }
+        
+        /* RTL Layout Support */
+        [dir="rtl"] body {
+            font-family: 'Segoe UI', Tahoma, Arial, sans-serif, 'Noto Sans Arabic', 'Arabic UI Text';
+        }
+        
+        [dir="rtl"] .page-layout > header {
+            direction: rtl;
+        }
+        
+        [dir="rtl"] .page-layout > main {
+            direction: rtl;
+        }
+        
+        [dir="rtl"] .page-layout > footer {
+            direction: rtl;
+        }
+        
+        h1, h2, h3, h4, h5, h6 {
+            margin-top: 0;
+            line-height: 1.2;
+        }
+        
+        a {
+            color: var(--sl-color-accent);
+        }
+        
+        code {
+            font-family: var(--sl-font-mono);
+        }
+        
+        /* Fixed layout structure for API pages */
+        .page-layout {
+            height: 100vh;
+            display: flex;
+            flex-direction: column;
+            overflow: hidden;
+        }
+        
+        /* Fixed header */
+        .page-layout > header {
+            flex-shrink: 0;
+            position: relative;
+            z-index: 100;
+        }
+        
+        /* Scrollable main content area */
+        .main-content {
+            flex: 1;
+            overflow-y: auto;
+            overflow-x: hidden;
+            background: var(--sl-color-bg);
+            min-height: 0;
+        }
+        
+        /* Fixed footer */
+        .page-layout > footer {
+            flex-shrink: 0;
+            position: relative;
+        }
+        
+        @media (max-width: 768px) {
+            html, body {
+                overflow-y: auto;
+                overflow-x: hidden;
+            }
+            
+            .page-layout {
+                min-height: 100vh;
+                height: auto;
+            }
+            
+            .main-content {
+                overflow-y: visible;
+                height: auto;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="page-layout">
+        <Header />
+        <div class="main-content">
+            <slot />
+        </div>
+        <Footer language={language} />
+    </div>
+</body>
+</html>
