@@ -1,0 +1,116 @@
+---
+// src/components/VersionedPage.astro
+// Debug component to show current version context
+import { parseCurrentPath } from '../utils/versions.ts';
+import { generateBreadcrumbs } from '../utils/sidebar.ts';
+
+const currentPath = Astro.url.pathname;
+const pathInfo = parseCurrentPath(currentPath);
+const breadcrumbs = generateBreadcrumbs(currentPath);
+---
+
+<div class="version-context-debug">
+    <div class="version-info">
+        <h4>Current Context:</h4>
+        <ul>
+            <li><strong>Language:</strong> {pathInfo.language}</li>
+            <li><strong>Guide Type:</strong> {pathInfo.guideType || 'None'}</li>
+            <li><strong>Version:</strong> {pathInfo.version}</li>
+            <li><strong>Full Path:</strong> {pathInfo.fullPath}</li>
+        </ul>
+    </div>
+    
+    <div class="breadcrumbs">
+        <h4>Breadcrumbs:</h4>
+        <nav aria-label="Breadcrumb">
+            <ol class="breadcrumb-list">
+                {breadcrumbs.map((crumb, index) => (
+                    <li class="breadcrumb-item">
+                        {crumb.link ? (
+                            <a href={crumb.link}>{crumb.text}</a>
+                        ) : (
+                            <span class="current">{crumb.text}</span>
+                        )}
+                        {index < breadcrumbs.length - 1 && <span class="separator">›</span>}
+                    </li>
+                ))}
+            </ol>
+        </nav>
+    </div>
+</div>
+
+<style>
+    .version-context-debug {
+        background: var(--sl-color-bg-accent);
+        border: 1px solid var(--sl-color-accent);
+        border-radius: 0.5rem;
+        padding: 1rem;
+        margin: 1rem 0;
+        font-size: 0.875rem;
+    }
+
+    .version-info h4,
+    .breadcrumbs h4 {
+        margin: 0 0 0.5rem 0;
+        color: var(--sl-color-text-accent);
+        font-size: 0.875rem;
+    }
+
+    .version-info ul {
+        list-style: none;
+        margin: 0;
+        padding: 0;
+    }
+
+    .version-info li {
+        margin: 0.25rem 0;
+        color: var(--sl-color-text);
+    }
+
+    .breadcrumb-list {
+        list-style: none;
+        margin: 0;
+        padding: 0;
+        display: flex;
+        flex-wrap: wrap;
+        align-items: center;
+        gap: 0.5rem;
+    }
+
+    .breadcrumb-item {
+        display: flex;
+        align-items: center;
+        gap: 0.5rem;
+    }
+
+    .breadcrumb-item a {
+        color: var(--sl-color-accent);
+        text-decoration: none;
+    }
+
+    .breadcrumb-item a:hover {
+        text-decoration: underline;
+    }
+
+    .breadcrumb-item .current {
+        color: var(--sl-color-text);
+        font-weight: 600;
+    }
+
+    .separator {
+        color: var(--sl-color-text-invert);
+        font-weight: 300;
+    }
+
+    /* Hide in production */
+    @media (min-width: 1024px) {
+        .version-context-debug {
+            position: fixed;
+            top: 1rem;
+            right: 1rem;
+            max-width: 300px;
+            z-index: 1000;
+            font-size: 0.75rem;
+        }
+    }
+</style>

@@ -1,0 +1,677 @@
+---
+export interface Props {
+    method: string;
+    path: string;
+    serverUrl: string;
+    requestBody?: any;
+    parameters?: any[];
+    headers?: Record<string, string>;
+    operationId?: string;
+}
+
+const { 
+    method, 
+    path, 
+    serverUrl, 
+    requestBody, 
+    parameters = [], 
+    headers = {},
+    operationId 
+} = Astro.props;
+
+const defaultHeaders = {
+    'Content-Type': 'application/json',
+    'Authorization': 'Bearer YOUR_ACCESS_TOKEN',
+    ...headers
+};
+
+const languages = [
+    { id: 'curl', name: 'cURL', icon: '🌐' },
+    { id: 'javascript', name: 'JavaScript', icon: '🟨' },
+    { id: 'python', name: 'Python', icon: '🐍' },
+    { id: 'java', name: 'Java', icon: '☕' },
+    { id: 'csharp', name: 'C#', icon: '🔷' },
+    { id: 'php', name: 'PHP', icon: '🐘' },
+    { id: 'go', name: 'Go', icon: '🐹' },
+    { id: 'ruby', name: 'Ruby', icon: '💎' },
+    { id: 'swift', name: 'Swift', icon: '🦉' },
+    { id: 'kotlin', name: 'Kotlin', icon: '🤖' },
+    { id: 'rust', name: 'Rust', icon: '🦀' },
+    { id: 'nodejs', name: 'Node.js', icon: '🟢' }
+];
+
+const fullUrl = `${serverUrl}${path}`;
+const requestBodyStr = requestBody ? JSON.stringify(requestBody, null, 2) : '';
+---
+
+<div class="code-snippet-generator">
+    <div class="snippet-header">
+        <h4>Code Examples</h4>
+        <div class="language-tabs">
+            {languages.map((lang, index) => (
+                <button 
+                    class={`tab-btn ${index === 0 ? 'active' : ''}`}
+                    data-language={lang.id}
+                    title={lang.name}
+                >
+                    <span class="tab-icon">{lang.icon}</span>
+                    <span class="tab-name">{lang.name}</span>
+                </button>
+            ))}
+        </div>
+    </div>
+
+    <div class="snippet-content">
+        {languages.map((lang, index) => (
+            <div 
+                class={`snippet-panel ${index === 0 ? 'active' : ''}`}
+                data-language={lang.id}
+            >
+                <div class="snippet-header-controls">
+                    <span class="language-label">{lang.name}</span>
+                    <button class="copy-btn" data-language={lang.id} title="Copy to clipboard">
+                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                            <rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect>
+                            <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path>
+                        </svg>
+                        Copy
+                    </button>
+                </div>
+                <pre class="code-block"><code id={`code-${lang.id}`}></code></pre>
+            </div>
+        ))}
+    </div>
+</div>
+
+<script define:vars={{ method, fullUrl, defaultHeaders, requestBodyStr, parameters }}>
+    class CodeSnippetGenerator {
+        constructor() {
+            this.method = method.toUpperCase();
+            this.url = fullUrl;
+            this.headers = defaultHeaders;
+            this.body = requestBodyStr;
+            this.params = parameters || [];
+            
+            this.initializeTabs();
+            this.generateAllSnippets();
+            this.initializeCopyButtons();
+        }
+
+        initializeTabs() {
+            const tabs = document.querySelectorAll('.tab-btn');
+            const panels = document.querySelectorAll('.snippet-panel');
+
+            tabs.forEach(tab => {
+                tab.addEventListener('click', () => {
+                    const language = tab.dataset.language;
+                    
+                    tabs.forEach(t => t.classList.remove('active'));
+                    panels.forEach(p => p.classList.remove('active'));
+                    
+                    tab.classList.add('active');
+                    document.querySelector(`[data-language="${language}"].snippet-panel`).classList.add('active');
+                });
+            });
+        }
+
+        generateAllSnippets() {
+            this.generateCurl();
+            this.generateJavaScript();
+            this.generatePython();
+            this.generateJava();
+            this.generateCSharp();
+            this.generatePhp();
+            this.generateGo();
+            this.generateRuby();
+            this.generateSwift();
+            this.generateKotlin();
+            this.generateRust();
+            this.generateNodeJS();
+        }
+
+        generateCurl() {
+            let curl = `curl -X ${this.method} "${this.url}"`;
+            
+            Object.entries(this.headers).forEach(([key, value]) => {
+                curl += ` \\\n  -H "${key}: ${value}"`;
+            });
+
+            if (this.body && (this.method === 'POST' || this.method === 'PUT' || this.method === 'PATCH')) {
+                curl += ` \\\n  -d '${this.body}'`;
+            }
+
+            document.getElementById('code-curl').textContent = curl;
+        }
+
+        generateJavaScript() {
+            const code = `fetch("${this.url}", {
+  method: "${this.method}",
+  headers: {
+${Object.entries(this.headers).map(([k, v]) => `    "${k}": "${v}"`).join(',\n')}
+  }${this.body && (this.method === 'POST' || this.method === 'PUT' || this.method === 'PATCH') ? `,\n  body: JSON.stringify(${this.body})` : ''}
+})
+.then(response => response.json())
+.then(data => console.log(data))
+.catch(error => console.error('Error:', error));`;
+
+            document.getElementById('code-javascript').textContent = code;
+        }
+
+        generatePython() {
+            const code = `import requests
+import json
+
+url = "${this.url}"
+headers = {
+${Object.entries(this.headers).map(([k, v]) => `    "${k}": "${v}"`).join(',\n')}
+}
+
+${this.body && (this.method === 'POST' || this.method === 'PUT' || this.method === 'PATCH') ? 
+`data = ${this.body}
+
+response = requests.${this.method.toLowerCase()}(url, headers=headers, json=data)` :
+`response = requests.${this.method.toLowerCase()}(url, headers=headers)`}
+
+if response.status_code == 200:
+    result = response.json()
+    print(result)
+else:
+    print(f"Error: {response.status_code}")`;
+
+            document.getElementById('code-python').textContent = code;
+        }
+
+        generateJava() {
+            const code = `import java.net.http.HttpClient;
+import java.net.http.HttpRequest;
+import java.net.http.HttpResponse;
+import java.net.URI;
+
+HttpClient client = HttpClient.newHttpClient();
+
+HttpRequest.Builder builder = HttpRequest.newBuilder()
+    .uri(URI.create("${this.url}"))
+    .method("${this.method}", ${this.body && (this.method === 'POST' || this.method === 'PUT' || this.method === 'PATCH') ? 
+        `HttpRequest.BodyPublishers.ofString("${this.body.replace(/"/g, '\\"')}")` : 
+        'HttpRequest.BodyPublishers.noBody()'})
+${Object.entries(this.headers).map(([k, v]) => `    .header("${k}", "${v}")`).join('\n')};
+
+HttpRequest request = builder.build();
+
+try {
+    HttpResponse<String> response = client.send(request, 
+        HttpResponse.BodyHandlers.ofString());
+    
+    System.out.println("Status: " + response.statusCode());
+    System.out.println("Response: " + response.body());
+} catch (Exception e) {
+    e.printStackTrace();
+}`;
+
+            document.getElementById('code-java').textContent = code;
+        }
+
+        generateCSharp() {
+            const code = `using System;
+using System.Net.Http;
+using System.Text;
+using System.Threading.Tasks;
+
+class Program 
+{
+    static async Task Main()
+    {
+        using var client = new HttpClient();
+        
+${Object.entries(this.headers).map(([k, v]) => `        client.DefaultRequestHeaders.Add("${k}", "${v}");`).join('\n')}
+
+        ${this.body && (this.method === 'POST' || this.method === 'PUT' || this.method === 'PATCH') ? 
+        `var json = @"${this.body.replace(/"/g, '""')}";
+        var content = new StringContent(json, Encoding.UTF8, "application/json");
+        
+        var response = await client.${this.method.charAt(0) + this.method.slice(1).toLowerCase()}Async("${this.url}", content);` :
+        `var response = await client.${this.method.charAt(0) + this.method.slice(1).toLowerCase()}Async("${this.url}");`}
+        
+        var responseString = await response.Content.ReadAsStringAsync();
+        Console.WriteLine($"Status: {response.StatusCode}");
+        Console.WriteLine($"Response: {responseString}");
+    }
+}`;
+
+            document.getElementById('code-csharp').textContent = code;
+        }
+
+        generatePhp() {
+            const code = `<?php
+$url = "${this.url}";
+$headers = [
+${Object.entries(this.headers).map(([k, v]) => `    "${k}: ${v}"`).join(',\n')}
+];
+
+${this.body && (this.method === 'POST' || this.method === 'PUT' || this.method === 'PATCH') ? 
+`$data = '${this.body}';
+
+$context = stream_context_create([
+    'http' => [
+        'method' => '${this.method}',
+        'header' => implode("\\r\\n", $headers),
+        'content' => $data
+    ]
+]);` :
+`$context = stream_context_create([
+    'http' => [
+        'method' => '${this.method}',
+        'header' => implode("\\r\\n", $headers)
+    ]
+]);`}
+
+$response = file_get_contents($url, false, $context);
+
+if ($response === FALSE) {
+    echo "Error making request";
+} else {
+    echo $response;
+}
+?>`;
+
+            document.getElementById('code-php').textContent = code;
+        }
+
+        generateGo() {
+            const code = `package main
+
+import (
+    "fmt"
+    "net/http"
+    "io/ioutil"
+${this.body && (this.method === 'POST' || this.method === 'PUT' || this.method === 'PATCH') ? '    "strings"' : ''}
+)
+
+func main() {
+    url := "${this.url}"
+    
+    ${this.body && (this.method === 'POST' || this.method === 'PUT' || this.method === 'PATCH') ? 
+    `payload := strings.NewReader(\`${this.body}\`)
+    
+    req, err := http.NewRequest("${this.method}", url, payload)` :
+    `req, err := http.NewRequest("${this.method}", url, nil)`}
+    
+    if err != nil {
+        fmt.Println("Error creating request:", err)
+        return
+    }
+    
+${Object.entries(this.headers).map(([k, v]) => `    req.Header.Set("${k}", "${v}")`).join('\n')}
+    
+    client := &http.Client{}
+    resp, err := client.Do(req)
+    if err != nil {
+        fmt.Println("Error making request:", err)
+        return
+    }
+    defer resp.Body.Close()
+    
+    body, err := ioutil.ReadAll(resp.Body)
+    if err != nil {
+        fmt.Println("Error reading response:", err)
+        return
+    }
+    
+    fmt.Printf("Status: %s\\n", resp.Status)
+    fmt.Printf("Response: %s\\n", body)
+}`;
+
+            document.getElementById('code-go').textContent = code;
+        }
+
+        generateRuby() {
+            const code = `require 'net/http'
+require 'uri'
+require 'json'
+
+uri = URI('${this.url}')
+http = Net::HTTP.new(uri.host, uri.port)
+http.use_ssl = true if uri.scheme == 'https'
+
+${this.body && (this.method === 'POST' || this.method === 'PUT' || this.method === 'PATCH') ? 
+`request = Net::HTTP::${this.method.charAt(0) + this.method.slice(1).toLowerCase()}.new(uri)
+request.body = '${this.body}'` :
+`request = Net::HTTP::${this.method.charAt(0) + this.method.slice(1).toLowerCase()}.new(uri)`}
+
+${Object.entries(this.headers).map(([k, v]) => `request['${k}'] = '${v}'`).join('\n')}
+
+response = http.request(request)
+
+puts "Status: #{response.code}"
+puts "Response: #{response.body}"`;
+
+            document.getElementById('code-ruby').textContent = code;
+        }
+
+        generateSwift() {
+            const code = `import Foundation
+
+let url = URL(string: "${this.url}")!
+var request = URLRequest(url: url)
+request.httpMethod = "${this.method}"
+
+${Object.entries(this.headers).map(([k, v]) => `request.setValue("${v}", forHTTPHeaderField: "${k}")`).join('\n')}
+
+${this.body && (this.method === 'POST' || this.method === 'PUT' || this.method === 'PATCH') ? 
+`let jsonData = """
+${this.body}
+""".data(using: .utf8)
+request.httpBody = jsonData` : ''}
+
+let task = URLSession.shared.dataTask(with: request) { data, response, error in
+    if let error = error {
+        print("Error: \\(error)")
+        return
+    }
+    
+    if let data = data, let responseString = String(data: data, encoding: .utf8) {
+        print("Response: \\(responseString)")
+    }
+}
+
+task.resume()`;
+
+            document.getElementById('code-swift').textContent = code;
+        }
+
+        generateKotlin() {
+            const code = `import okhttp3.*
+import okhttp3.MediaType.Companion.toMediaType
+import okhttp3.RequestBody.Companion.toRequestBody
+import java.io.IOException
+
+val client = OkHttpClient()
+
+${this.body && (this.method === 'POST' || this.method === 'PUT' || this.method === 'PATCH') ? 
+`val mediaType = "application/json".toMediaType()
+val body = """${this.body}""".toRequestBody(mediaType)` : ''}
+
+val request = Request.Builder()
+    .url("${this.url}")
+    .method("${this.method}", ${this.body && (this.method === 'POST' || this.method === 'PUT' || this.method === 'PATCH') ? 'body' : 'null'})
+${Object.entries(this.headers).map(([k, v]) => `    .addHeader("${k}", "${v}")`).join('\n')}
+    .build()
+
+client.newCall(request).enqueue(object : Callback {
+    override fun onFailure(call: Call, e: IOException) {
+        println("Error: \${e.message}")
+    }
+
+    override fun onResponse(call: Call, response: Response) {
+        response.use {
+            if (!response.isSuccessful) {
+                println("Unexpected code \${response.code}")
+                return
+            }
+            
+            println("Response: \${response.body?.string()}")
+        }
+    }
+})`;
+
+            document.getElementById('code-kotlin').textContent = code;
+        }
+
+        generateRust() {
+            const code = `use reqwest;
+use serde_json::json;
+use std::collections::HashMap;
+
+#[tokio::main]
+async fn main() -> Result<(), Box<dyn std::error::Error>> {
+    let client = reqwest::Client::new();
+    
+    let mut headers = reqwest::header::HeaderMap::new();
+${Object.entries(this.headers).map(([k, v]) => `    headers.insert("${k}", "${v}".parse()?);`).join('\n')}
+    
+    ${this.body && (this.method === 'POST' || this.method === 'PUT' || this.method === 'PATCH') ? 
+    `let body = json!(${this.body});
+    
+    let response = client
+        .${this.method.toLowerCase()}("${this.url}")
+        .headers(headers)
+        .json(&body)
+        .send()
+        .await?;` :
+    `let response = client
+        .${this.method.toLowerCase()}("${this.url}")
+        .headers(headers)
+        .send()
+        .await?;`}
+    
+    let status = response.status();
+    let body = response.text().await?;
+    
+    println!("Status: {}", status);
+    println!("Response: {}", body);
+    
+    Ok(())
+}`;
+
+            document.getElementById('code-rust').textContent = code;
+        }
+
+        generateNodeJS() {
+            const code = `const https = require('https');
+${this.body && (this.method === 'POST' || this.method === 'PUT' || this.method === 'PATCH') ? 'const querystring = require(\'querystring\');' : ''}
+
+const options = {
+    hostname: '${new URL(this.url).hostname}',
+    port: ${new URL(this.url).port || (new URL(this.url).protocol === 'https:' ? 443 : 80)},
+    path: '${new URL(this.url).pathname}',
+    method: '${this.method}',
+    headers: {
+${Object.entries(this.headers).map(([k, v]) => `        '${k}': '${v}'`).join(',\n')}
+    }
+};
+
+const req = https.request(options, (res) => {
+    console.log(\`Status: \${res.statusCode}\`);
+    
+    let data = '';
+    res.on('data', (chunk) => {
+        data += chunk;
+    });
+    
+    res.on('end', () => {
+        console.log('Response:', data);
+    });
+});
+
+req.on('error', (error) => {
+    console.error('Error:', error);
+});
+
+${this.body && (this.method === 'POST' || this.method === 'PUT' || this.method === 'PATCH') ? 
+`req.write('${this.body}');` : ''}
+req.end();`;
+
+            document.getElementById('code-nodejs').textContent = code;
+        }
+
+        initializeCopyButtons() {
+            document.querySelectorAll('.copy-btn').forEach(btn => {
+                btn.addEventListener('click', async () => {
+                    const language = btn.dataset.language;
+                    const codeElement = document.getElementById(`code-${language}`);
+                    const code = codeElement.textContent;
+
+                    try {
+                        await navigator.clipboard.writeText(code);
+                        btn.innerHTML = `
+                            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                <polyline points="20,6 9,17 4,12"></polyline>
+                            </svg>
+                            Copied!
+                        `;
+                        
+                        setTimeout(() => {
+                            btn.innerHTML = `
+                                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                    <rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect>
+                                    <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path>
+                                </svg>
+                                Copy
+                            `;
+                        }, 2000);
+                    } catch (err) {
+                        console.error('Failed to copy: ', err);
+                    }
+                });
+            });
+        }
+    }
+
+    new CodeSnippetGenerator();
+</script>
+
+<style>
+    .code-snippet-generator {
+        background: #ffffff;
+        border: 1px solid #e2e8f0;
+        border-radius: 0.5rem;
+        overflow: hidden;
+        margin: 1rem 0;
+    }
+
+    .snippet-header {
+        background: #f8fafc;
+        border-bottom: 1px solid #e2e8f0;
+        padding: 1rem;
+    }
+
+    .snippet-header h4 {
+        margin: 0 0 1rem 0;
+        color: #1e293b;
+        font-size: 1.125rem;
+        font-weight: 600;
+    }
+
+    .language-tabs {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 0.5rem;
+    }
+
+    .tab-btn {
+        display: flex;
+        align-items: center;
+        gap: 0.5rem;
+        padding: 0.5rem 0.75rem;
+        background: #ffffff;
+        border: 1px solid #d1d5db;
+        border-radius: 0.375rem;
+        cursor: pointer;
+        font-size: 0.875rem;
+        color: #6b7280;
+        transition: all 0.2s ease;
+    }
+
+    .tab-btn:hover {
+        background: #f9fafb;
+        border-color: #9ca3af;
+        color: #374151;
+    }
+
+    .tab-btn.active {
+        background: #3b82f6;
+        border-color: #3b82f6;
+        color: #ffffff;
+    }
+
+    .tab-icon {
+        font-size: 1rem;
+    }
+
+    .tab-name {
+        font-weight: 500;
+    }
+
+    .snippet-content {
+        position: relative;
+    }
+
+    .snippet-panel {
+        display: none;
+    }
+
+    .snippet-panel.active {
+        display: block;
+    }
+
+    .snippet-header-controls {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        padding: 0.75rem 1rem;
+        background: #f1f5f9;
+        border-bottom: 1px solid #e2e8f0;
+    }
+
+    .language-label {
+        font-size: 0.875rem;
+        font-weight: 600;
+        color: #475569;
+    }
+
+    .copy-btn {
+        display: flex;
+        align-items: center;
+        gap: 0.5rem;
+        padding: 0.375rem 0.75rem;
+        background: #ffffff;
+        border: 1px solid #d1d5db;
+        border-radius: 0.375rem;
+        cursor: pointer;
+        font-size: 0.75rem;
+        color: #6b7280;
+        transition: all 0.2s ease;
+    }
+
+    .copy-btn:hover {
+        background: #f9fafb;
+        border-color: #9ca3af;
+        color: #374151;
+    }
+
+    .code-block {
+        margin: 0;
+        padding: 1.5rem;
+        background: #f8fafc;
+        font-family: 'SFMono-Regular', Consolas, 'Liberation Mono', Menlo, monospace;
+        font-size: 0.875rem;
+        line-height: 1.6;
+        color: #1e293b;
+        overflow-x: auto;
+        white-space: pre-wrap;
+        word-wrap: break-word;
+    }
+
+    .code-block code {
+        background: none;
+        padding: 0;
+        font-size: inherit;
+        color: inherit;
+    }
+
+    @media (max-width: 768px) {
+        .language-tabs {
+            flex-direction: column;
+        }
+        
+        .tab-btn {
+            justify-content: center;
+        }
+        
+        .snippet-header-controls {
+            flex-direction: column;
+            gap: 0.5rem;
+            align-items: flex-start;
+        }
+    }
+</style>

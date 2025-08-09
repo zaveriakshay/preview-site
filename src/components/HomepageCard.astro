@@ -1,0 +1,45 @@
+---
+export interface Props {
+    title: string;
+    description: string;
+    href?: string;
+    icon?: string;
+}
+
+const { title, description, href, icon } = Astro.props;
+const Tag = href ? 'a' : 'div';
+---
+
+<Tag class="homepage-card" href={href}>
+    <div class="homepage-card-content">
+        {icon && (
+            <svg class="homepage-card-icon" width="32" height="32" viewBox="0 0 24 24" fill="currentColor" stroke="none">
+                {icon === 'document' && (
+                    <path d="M7 3C5.89543 3 5 3.89543 5 5V19C5 20.1046 5.89543 21 7 21H17C18.1046 21 19 20.1046 19 19V9L13 3H7ZM13 3V9H19M9 13H15M9 17H15" stroke="currentColor" stroke-width="1.5" fill="none"/>
+                )}
+                {icon === 'setting' && (
+                    <path d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z" stroke="currentColor" stroke-width="1.5" fill="none"/>
+                    <circle cx="12" cy="12" r="3" stroke="currentColor" stroke-width="1.5" fill="none"/>
+                )}
+                {icon === 'history' && (
+                    <>
+                        <circle cx="12" cy="12" r="9" stroke="currentColor" stroke-width="1.5" fill="none"/>
+                        <path d="M12 6v6l4 2" stroke="currentColor" stroke-width="1.5" fill="none"/>
+                    </>
+                )}
+            </svg>
+        )}
+        <h3>{title}</h3>
+        <p>{description}</p>
+    </div>
+</Tag>
+
+<style>
+.homepage-card-content {
+    text-align: left;
+}
+
+[dir="rtl"] .homepage-card-content {
+    text-align: right;
+}
+</style>

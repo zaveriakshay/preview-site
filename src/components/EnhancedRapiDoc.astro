@@ -1,0 +1,426 @@
+---
+import CodeSnippetGenerator from './CodeSnippetGenerator.astro';
+import { OpenAPICodeExtractor } from '../utils/openapi-code-extractor';
+import { getApiSpecById } from '../utils/dynamic-openapi';
+
+export interface Props {
+    specUrl: string;
+    specId?: string;
+    language?: string;
+    version?: string;
+}
+
+const { specUrl, specId, language = 'en', version = 'v3' } = Astro.props;
+
+// Ensure the spec URL is absolute
+const absoluteSpecUrl = specUrl.startsWith('http') 
+    ? specUrl 
+    : `${Astro.url.origin}${specUrl}`;
+
+let operationsData: any[] = [];
+let specData: any = null;
+
+// Extract spec ID from URL if not provided
+const extractedSpecId = specId || specUrl.split('/').pop()?.replace('.yaml', '').replace('.json', '');
+
+if (extractedSpecId) {
+    try {
+        const apiSpec = await getApiSpecById(extractedSpecId, language, version);
+        if (apiSpec) {
+            specData = apiSpec.spec;
+            const extractor = new OpenAPICodeExtractor(specData);
+            const operations = extractor.getAllOperations();
+            
+            operationsData = operations.map(operation => {
+                const codeData = extractor.generateCodeData(operation);
+                return {
+                    ...codeData,
+                    id: `${operation.method.toLowerCase()}-${operation.path.replace(/[^a-zA-Z0-9]/g, '-')}`,
+                    summary: operation.summary,
+                    description: operation.description
+                };
+            });
+        }
+    } catch (error) {
+        console.error('Failed to load API spec for code generation:', error);
+    }
+}
+---
+
+<div class="enhanced-rapidoc-container">
+    <!-- RapiDoc Component -->
+    <div id="rapidoc-container" class="rapidoc-wrapper">
+        <rapi-doc
+            id="rapidoc-element"
+            spec-url={absoluteSpecUrl}
+            render-style="read"
+            style="--resp-area-height:400px; --font-size-small:12px; height: 100%; width: 100%;"
+            theme="light"
+            layout="row"
+            schema-style="tree"
+            show-header="true"
+            show-sidebar="true"
+            show-info="true"
+            show-components="true"
+            allow-try="true"
+            allow-search="true"
+            allow-advanced-search="true"
+            allow-spec-url-load="false"
+            allow-spec-file-load="false"
+            show-curl-before-try="true"
+            default-schema-tab="model"
+            response-area-height="400px"
+            nav-item-spacing="relaxed"
+            use-path-in-nav-bar="true"
+            info-description-headings-in-navbar="true"
+            show-method-in-nav-bar="as-colored-text"
+            sort-tags="false"
+            sort-endpoints-by="path"
+            fill-request-fields-with-example="true"
+            persist-auth="true"
+            nav-bg-color="#fafbfc"
+            nav-text-color="#64748b"
+            nav-hover-bg-color="#f1f5f9"
+            nav-hover-text-color="#1e293b"
+            nav-accent-color="#3b82f6"
+            bg-color="#ffffff"
+            text-color="#1e293b"
+            header-color="#f8fafc"
+            primary-color="#3b82f6"
+            font-regular="system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif"
+            font-mono="'SFMono-Regular', Consolas, 'Liberation Mono', Menlo, monospace"
+            load-fonts="false"
+            get-color="#10b981"
+            post-color="#3b82f6"
+            put-color="#f59e0b"
+            delete-color="#ef4444"
+            patch-color="#8b5cf6"
+            head-color="#6b7280"
+            options-color="#6b7280"
+            regular-font-size="14px"
+            mono-font-size="13px"
+            nav-item-font-size="13px"
+            show-curl="true"
+            show-example="true"
+            default-api-server="https://api-dev02.noqodi.com"
+            api-key-name="Authorization"
+            api-key-location="header"
+            api-key-value=""
+            update-route="false"
+            route-prefix=""
+            goto-path=""
+            fetch-credentials="same-origin"
+        >
+            <div slot="logo" style="display: flex; align-items: center; padding: 12px;">
+                <span style="font-size: 1.25rem; font-weight: 600; color: #1e293b;">API Documentation</span>
+            </div>
+        </rapi-doc>
+    </div>
+
+    <!-- Code Snippet Generators -->
+    <div class="code-snippets-container" style="display: none;">
+        {operationsData.map(operation => (
+            <div id={`code-snippets-${operation.id}`} class="code-snippets-section">
+                <CodeSnippetGenerator
+                    method={operation.method}
+                    path={operation.path}
+                    serverUrl={operation.serverUrl}
+                    requestBody={operation.requestBody}
+                    parameters={operation.parameters}
+                    headers={operation.headers}
+                    operationId={operation.operationId}
+                />
+            </div>
+        ))}
+    </div>
+</div>
+
+<!-- Load RapiDoc script -->
+<script src="https://unpkg.com/rapidoc/dist/rapidoc-min.js" type="module"></script>
+
+<script define:vars={{ operationsData }}>
+    class EnhancedRapiDoc {
+        constructor() {
+            this.operationsData = operationsData;
+            this.initializeRapiDoc();
+            this.injectCodeSnippets();
+        }
+
+        initializeRapiDoc() {
+            const rapidocElement = document.getElementById('rapidoc-element');
+            if (!rapidocElement) {
+                console.error('RapiDoc element not found');
+                return;
+            }
+
+            // Listen for spec loaded event
+            rapidocElement.addEventListener('spec-loaded', (e) => {
+                console.log('Spec loaded successfully:', e.detail);
+                
+                // Inject code snippets after spec loads
+                setTimeout(() => {
+                    this.injectCodeSnippets();
+                }, 1500);
+            });
+
+            // Listen for spec load error
+            rapidocElement.addEventListener('spec-load-error', (e) => {
+                console.error('Failed to load spec:', e.detail);
+                
+                // Show error in the container
+                const container = document.getElementById('rapidoc-container');
+                if (container) {
+                    container.innerHTML = `
+                        <div class="error-message">
+                            <h2>Failed to Load API Documentation</h2>
+                            <p>Error: ${e.detail.message || e.detail}</p>
+                            <p>Spec URL: ${rapidocElement.getAttribute('spec-url')}</p>
+                            <button onclick="location.reload()" class="retry-button">Retry</button>
+                        </div>
+                    `;
+                }
+            });
+
+            // Add event listeners for API testing
+            rapidocElement.addEventListener('before-try', (e) => {
+                console.log('API try initiated:', e.detail);
+            });
+
+            rapidocElement.addEventListener('after-try', (e) => {
+                console.log('API response received:', e.detail);
+            });
+        }
+
+        injectCodeSnippets() {
+            const rapidocElement = document.getElementById('rapidoc-element');
+            if (!rapidocElement || !rapidocElement.shadowRoot) {
+                console.log('RapiDoc shadow root not ready, retrying...');
+                setTimeout(() => this.injectCodeSnippets(), 1000);
+                return;
+            }
+
+            const shadowRoot = rapidocElement.shadowRoot;
+            
+            this.operationsData.forEach(operation => {
+                // Find the operation section in RapiDoc's shadow DOM
+                const operationSelector = `[part*="section-operation"][part*="${operation.method.toLowerCase()}-${operation.path.replace(/[{}]/g, '').replace(/\//g, '-')}"]`;
+                let operationSection = shadowRoot.querySelector(operationSelector);
+                
+                // Fallback: try to find by operation ID or other identifiers
+                if (!operationSection) {
+                    const possibleSelectors = [
+                        `[part*="${operation.method.toLowerCase()}"]`,
+                        `[id*="${operation.operationId}"]`,
+                        `.expanded-endpoint-body.${operation.method.toLowerCase()}`
+                    ];
+                    
+                    for (const selector of possibleSelectors) {
+                        const elements = shadowRoot.querySelectorAll(selector);
+                        for (const element of elements) {
+                            if (element.textContent?.includes(operation.path) || 
+                                element.id?.includes(operation.path.replace(/[^a-zA-Z0-9]/g, '-'))) {
+                                operationSection = element;
+                                break;
+                            }
+                        }
+                        if (operationSection) break;
+                    }
+                }
+
+                if (operationSection) {
+                    // Check if we already injected code snippets for this operation
+                    if (operationSection.querySelector('.injected-code-snippets')) {
+                        return;
+                    }
+
+                    // Get the code snippets HTML
+                    const codeSnippetsElement = document.getElementById(`code-snippets-${operation.id}`);
+                    if (codeSnippetsElement) {
+                        // Clone the code snippets element
+                        const clonedSnippets = codeSnippetsElement.cloneNode(true);
+                        clonedSnippets.style.display = 'block';
+                        clonedSnippets.classList.add('injected-code-snippets');
+                        
+                        // Find the best place to inject (after the description but before try-it)
+                        const tryContainer = operationSection.querySelector('.expanded-req-resp-container');
+                        if (tryContainer) {
+                            tryContainer.parentNode.insertBefore(clonedSnippets, tryContainer);
+                        } else {
+                            // Fallback: append to the end of the operation section
+                            operationSection.appendChild(clonedSnippets);
+                        }
+
+                        console.log(`Injected code snippets for ${operation.method} ${operation.path}`);
+                    }
+                } else {
+                    console.warn(`Could not find operation section for ${operation.method} ${operation.path}`);
+                }
+            });
+        }
+    }
+
+    // Initialize when DOM is ready
+    if (document.readyState === 'loading') {
+        document.addEventListener('DOMContentLoaded', () => {
+            setTimeout(() => new EnhancedRapiDoc(), 100);
+        });
+    } else {
+        setTimeout(() => new EnhancedRapiDoc(), 100);
+    }
+</script>
+
+<style>
+    .enhanced-rapidoc-container {
+        width: 100%;
+        height: 100%;
+        background: #ffffff;
+        overflow: hidden;
+        position: relative;
+        display: flex;
+        flex-direction: column;
+    }
+    
+    .rapidoc-wrapper {
+        width: 100%;
+        height: 100%;
+        background: #ffffff;
+        overflow: hidden;
+        position: relative;
+        display: flex;
+        flex-direction: column;
+    }
+    
+    /* Ensure RapiDoc takes full height */
+    .rapidoc-wrapper rapi-doc {
+        flex: 1;
+        display: block !important;
+    }
+    
+    .code-snippets-container {
+        position: absolute;
+        top: -9999px;
+        left: -9999px;
+        visibility: hidden;
+    }
+    
+    /* Error message styling */
+    .error-message {
+        padding: 2rem;
+        text-align: center;
+        color: #64748b;
+        height: 100%;
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+        background: #ffffff;
+    }
+    
+    .error-message h2 {
+        color: #ef4444;
+        margin-bottom: 1rem;
+        font-size: 1.5rem;
+        font-weight: 600;
+    }
+    
+    .error-message p {
+        margin-bottom: 0.5rem;
+        color: #64748b;
+        line-height: 1.6;
+    }
+    
+    .retry-button {
+        background: #3b82f6;
+        color: white;
+        border: none;
+        padding: 0.75rem 1.5rem;
+        border-radius: 0.375rem;
+        cursor: pointer;
+        font-weight: 500;
+        margin-top: 1rem;
+        transition: background 0.2s ease;
+        font-size: 0.875rem;
+    }
+    
+    .retry-button:hover {
+        background: #1d4ed8;
+    }
+    
+    /* Override RapiDoc internal styles for better integration */
+    .rapidoc-wrapper rapi-doc::part(section-navbar) {
+        background: #fafbfc !important;
+        border-right: 1px solid #e2e8f0 !important;
+        width: 320px !important;
+        min-width: 280px !important;
+        max-width: 400px !important;
+        overflow-y: auto !important;
+        flex-shrink: 0 !important;
+    }
+    
+    .rapidoc-wrapper rapi-doc::part(section-main-content) {
+        background: #ffffff !important;
+        padding: 2rem !important;
+        overflow-y: auto !important;
+        flex: 1 !important;
+    }
+    
+    /* Navigation styling */
+    .rapidoc-wrapper rapi-doc::part(nav-bar-info) {
+        padding: 1rem !important;
+        border-bottom: 1px solid #e2e8f0 !important;
+        background: #f8fafc !important;
+    }
+    
+    .rapidoc-wrapper rapi-doc::part(nav-bar-search) {
+        padding: 0.75rem 1rem !important;
+        border-bottom: 1px solid #e2e8f0 !important;
+        background: #ffffff !important;
+    }
+    
+    .rapidoc-wrapper rapi-doc::part(btn-fill) {
+        background: #3b82f6 !important;
+        color: #ffffff !important;
+        border: none !important;
+        border-radius: 0.375rem !important;
+        font-weight: 500 !important;
+        transition: background 0.2s ease !important;
+    }
+    
+    .rapidoc-wrapper rapi-doc::part(btn-fill):hover {
+        background: #1d4ed8 !important;
+    }
+    
+    .rapidoc-wrapper rapi-doc::part(nav-bar-tag) {
+        font-weight: 600 !important;
+        color: #1e293b !important;
+        font-size: 0.875rem !important;
+        margin-top: 1rem !important;
+    }
+    
+    .rapidoc-wrapper rapi-doc::part(nav-bar-path) {
+        font-size: 0.875rem !important;
+    }
+    
+    /* Ensure injected code snippets have proper styling */
+    :global(.injected-code-snippets) {
+        margin: 1.5rem 0 !important;
+        border-radius: 0.5rem !important;
+        overflow: hidden !important;
+    }
+    
+    /* Responsive design */
+    @media (max-width: 768px) {
+        .rapidoc-wrapper rapi-doc::part(section-navbar) {
+            width: 100% !important;
+            position: relative !important;
+            height: auto !important;
+            max-height: 40vh !important;
+            border-right: none !important;
+            border-bottom: 1px solid #e2e8f0 !important;
+        }
+        
+        .rapidoc-wrapper rapi-doc {
+            flex-direction: column !important;
+        }
+    }
+</style>

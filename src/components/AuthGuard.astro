@@ -1,0 +1,319 @@
+---
+import { authConfigManager } from '../utils/auth-config.ts';
+
+interface Props {
+    requireAuth?: boolean;
+    requiredRole?: string;
+    pagePath?: string;
+    fallback?: 'redirect' | 'component';
+    language?: string;
+}
+
+const { 
+    requireAuth = false, 
+    requiredRole,
+    pagePath = Astro.url.pathname,
+    fallback = 'component',
+    language = 'en'
+} = Astro.props;
+
+const authConfig = await authConfigManager.loadConfig();
+
+let visibilityCheck: {
+    visible: boolean;
+    requiresAuth: boolean;
+    requiredRole?: string;
+} = { visible: true, requiresAuth: false };
+
+if (authConfig.auth.enabled) {
+    visibilityCheck = await authConfigManager.checkPageVisibility(pagePath);
+}
+
+const shouldRequireAuth = requireAuth || visibilityCheck.requiresAuth;
+const shouldRequireRole = requiredRole || visibilityCheck.requiredRole;
+---
+
+<div id="auth-guard" data-require-auth={shouldRequireAuth} data-required-role={shouldRequireRole} data-page-path={pagePath} data-fallback={fallback} data-language={language}>
+    <div id="auth-guard-loading" class="auth-loading">
+        <div class="loading-spinner"></div>
+        <span>Checking authentication...</span>
+    </div>
+    
+    <div id="auth-guard-login-required" class="auth-login-required" style="display: none;">
+        <div class="lock-icon">
+            <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <rect x="3" y="11" width="18" height="11" rx="2" ry="2"></rect>
+                <circle cx="12" cy="7" r="4"></circle>
+                <path d="M12 1v6"></path>
+            </svg>
+        </div>
+        <h2>Authentication Required</h2>
+        <p id="auth-message">Please sign in to access this content.</p>
+        <button id="auth-login-btn" class="auth-login-button">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <path d="M15 3h4a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2h-4"></path>
+                <polyline points="10,17 15,12 10,7"></polyline>
+                <line x1="15" y1="12" x2="3" y2="12"></line>
+            </svg>
+            Sign in with noqodi
+        </button>
+    </div>
+    
+    <div id="auth-guard-insufficient-role" class="auth-insufficient-role" style="display: none;">
+        <div class="shield-icon">
+            <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z"></path>
+            </svg>
+        </div>
+        <h2>Access Restricted</h2>
+        <p>You don't have sufficient permissions to access this content.</p>
+        <p id="required-role-message"></p>
+    </div>
+    
+    <div id="auth-guard-content" style="display: none;">
+        <slot />
+    </div>
+</div>
+
+<script>
+document.addEventListener('DOMContentLoaded', () => {
+    const authGuard = document.getElementById('auth-guard');
+    if (!authGuard) return;
+    
+    const requireAuth = authGuard.dataset.requireAuth === 'true';
+    const requiredRole = authGuard.dataset.requiredRole;
+    const pagePath = authGuard.dataset.pagePath;
+    const fallback = authGuard.dataset.fallback;
+    const language = authGuard.dataset.language || 'en';
+    
+    const loadingEl = document.getElementById('auth-guard-loading');
+    const loginRequiredEl = document.getElementById('auth-guard-login-required');
+    const insufficientRoleEl = document.getElementById('auth-guard-insufficient-role');
+    const contentEl = document.getElementById('auth-guard-content');
+    const loginBtn = document.getElementById('auth-login-btn');
+    const authMessage = document.getElementById('auth-message');
+    const requiredRoleMessage = document.getElementById('required-role-message');
+    
+    function showElement(element) {
+        document.querySelectorAll('#auth-guard > div').forEach(el => el.style.display = 'none');
+        if (element) element.style.display = 'block';
+    }
+    
+    function updateMessages() {
+        const messages = {
+            en: {
+                authRequired: 'Please sign in to access this content.',
+                signIn: 'Sign in with noqodi',
+                accessRestricted: 'You don\'t have sufficient permissions to access this content.',
+                requiredRole: `This content requires the "${requiredRole}" role.`
+            },
+            ar: {
+                authRequired: 'يرجى تسجيل الدخول للوصول إلى هذا المحتوى.',
+                signIn: 'تسجيل الدخول باستخدام نقودي',
+                accessRestricted: 'ليس لديك صلاحيات كافية للوصول إلى هذا المحتوى.',
+                requiredRole: `يتطلب هذا المحتوى دور "${requiredRole}".`
+            }
+        };
+        
+        const msg = messages[language] || messages.en;
+        
+        if (authMessage) authMessage.textContent = msg.authRequired;
+        if (loginBtn) loginBtn.textContent = msg.signIn;
+        if (requiredRoleMessage) requiredRoleMessage.textContent = msg.requiredRole;
+    }
+    
+    async function checkAccess() {
+        try {
+            if (!window.noqodiAuth) {
+                console.error('NoqodiAuth not initialized');
+                showElement(contentEl);
+                return;
+            }
+            
+            if (!requireAuth && !requiredRole) {
+                showElement(contentEl);
+                return;
+            }
+            
+            const isAuthenticated = window.noqodiAuth.isAuthenticated();
+            const userRoles = window.noqodiAuth.getUserRoles();
+            
+            if (!isAuthenticated && requireAuth) {
+                updateMessages();
+                
+                if (fallback === 'redirect') {
+                    window.noqodiAuth.login({
+                        state: pagePath,
+                        language: language
+                    });
+                    return;
+                } else {
+                    showElement(loginRequiredEl);
+                    return;
+                }
+            }
+            
+            if (requiredRole && !userRoles.includes(requiredRole)) {
+                updateMessages();
+                showElement(insufficientRoleEl);
+                return;
+            }
+            
+            showElement(contentEl);
+            
+        } catch (error) {
+            console.error('Auth guard check failed:', error);
+            showElement(contentEl);
+        }
+    }
+    
+    if (loginBtn) {
+        loginBtn.addEventListener('click', () => {
+            if (window.noqodiAuth) {
+                window.noqodiAuth.login({
+                    state: pagePath,
+                    language: language
+                });
+            }
+        });
+    }
+    
+    window.addEventListener('auth:initialized', checkAccess);
+    window.addEventListener('auth:login', checkAccess);
+    window.addEventListener('auth:logout', checkAccess);
+    
+    if (window.noqodiAuth && window.noqodiAuth.initialized) {
+        checkAccess();
+    } else {
+        setTimeout(checkAccess, 100);
+    }
+});
+</script>
+
+<style>
+    #auth-guard {
+        min-height: 200px;
+    }
+
+    .auth-loading {
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+        padding: 3rem 2rem;
+        color: #68768a;
+        font-style: italic;
+        gap: 1rem;
+    }
+
+    .loading-spinner {
+        width: 32px;
+        height: 32px;
+        border: 3px solid #f3f4f6;
+        border-top: 3px solid #635bff;
+        border-radius: 50%;
+        animation: spin 1s linear infinite;
+    }
+
+    @keyframes spin {
+        0% { transform: rotate(0deg); }
+        100% { transform: rotate(360deg); }
+    }
+
+    .auth-login-required,
+    .auth-insufficient-role {
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+        padding: 3rem 2rem;
+        text-align: center;
+        background: #f8fafc;
+        border: 1px solid #e2e8f0;
+        border-radius: 12px;
+        margin: 2rem 0;
+        max-width: 500px;
+        margin-left: auto;
+        margin-right: auto;
+    }
+
+    .lock-icon,
+    .shield-icon {
+        color: #635bff;
+        margin-bottom: 1.5rem;
+        opacity: 0.8;
+    }
+
+    .auth-login-required h2,
+    .auth-insufficient-role h2 {
+        color: #1e293b;
+        font-size: 1.5rem;
+        font-weight: 600;
+        margin-bottom: 1rem;
+    }
+
+    .auth-login-required p,
+    .auth-insufficient-role p {
+        color: #64748b;
+        font-size: 1rem;
+        margin-bottom: 1rem;
+        max-width: 400px;
+        line-height: 1.5;
+    }
+
+    .auth-login-button {
+        background: #635bff;
+        color: white;
+        border: none;
+        padding: 12px 24px;
+        border-radius: 8px;
+        font-size: 1rem;
+        font-weight: 500;
+        cursor: pointer;
+        transition: all 0.15s ease;
+        text-decoration: none;
+        display: inline-flex;
+        align-items: center;
+        gap: 8px;
+        margin-top: 1rem;
+    }
+
+    .auth-login-button:hover {
+        background: #5a52ff;
+        transform: translateY(-2px);
+        box-shadow: 0 8px 16px rgba(99, 91, 255, 0.25);
+    }
+
+    .auth-login-button:active {
+        transform: translateY(0);
+        box-shadow: 0 4px 8px rgba(99, 91, 255, 0.15);
+    }
+
+    #required-role-message {
+        font-weight: 500;
+        color: #dc2626;
+        background: #fef2f2;
+        border: 1px solid #fecaca;
+        border-radius: 6px;
+        padding: 0.75rem 1rem;
+        font-size: 0.875rem;
+    }
+
+    @media (max-width: 640px) {
+        .auth-login-required,
+        .auth-insufficient-role {
+            padding: 2rem 1rem;
+            margin: 1rem;
+        }
+        
+        .auth-login-required h2,
+        .auth-insufficient-role h2 {
+            font-size: 1.25rem;
+        }
+        
+        .auth-login-button {
+            padding: 10px 20px;
+            font-size: 0.9rem;
+        }
+    }
+</style>

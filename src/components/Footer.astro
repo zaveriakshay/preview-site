@@ -1,0 +1,459 @@
+---
+import { isStarlightRoute, isIgnorableAstroError } from '../utils/starlight-utils.ts';
+
+export interface Props {
+    language?: 'en' | 'ar';
+}
+
+// Extract language from current path if not provided
+const currentPath = Astro.url.pathname;
+const pathParts = currentPath.split('/').filter(Boolean);
+const detectedLanguage = (pathParts[0] === 'en' || pathParts[0] === 'ar') ? pathParts[0] as 'en' | 'ar' : 'en';
+
+const { language = detectedLanguage } = Astro.props;
+const isRTL = language === 'ar';
+
+const currentYear = new Date().getFullYear();
+
+// Check if we're in a Starlight context using safe utility
+let EditLink, LastUpdated, Pagination;
+let isStarlightContext = false;
+
+try {
+    // Use our safe utility to check for Starlight context
+    if (isStarlightRoute(Astro)) {
+        isStarlightContext = true;
+        // Dynamically import Starlight components only when needed
+        const starlightComponents = await import('virtual:starlight/components/EditLink');
+        EditLink = starlightComponents.default;
+        const lastUpdatedComponents = await import('virtual:starlight/components/LastUpdated');
+        LastUpdated = lastUpdatedComponents.default;
+        const paginationComponents = await import('virtual:starlight/components/Pagination');
+        Pagination = paginationComponents.default;
+    }
+} catch (error) {
+    // Check if this is an ignorable Starlight routing error
+    if (isIgnorableAstroError(error)) {
+        console.debug('Starlight routing error (expected for custom routes):', error?.message || error);
+    } else {
+        console.warn('Unexpected error loading Starlight components:', error?.message || error);
+    }
+    isStarlightContext = false;
+}
+
+const footerData = {
+    en: {
+        company: {
+            name: 'noqodi',
+            description: 'Empowering businesses with secure, innovative payment solutions across the Middle East and beyond.',
+            address: 'UAE, Dubai, DIFC'
+        },
+        sections: [
+            {
+                title: 'Products',
+                links: [
+                    { label: 'Payment Gateway', href: 'https://www.noqodi.com/en/payment-gateway' },
+                    { label: 'Digital Wallet', href: 'https://www.noqodi.com/en/digital-wallet' },
+                    { label: 'Merchant Services', href: 'https://www.noqodi.com/en/merchant-services' },
+                    { label: 'White Label Solutions', href: 'https://www.noqodi.com/en/white-label' }
+                ]
+            },
+            {
+                title: 'Developers',
+                links: [
+                    { label: 'API Documentation', href: '/en/guides' },
+                    { label: 'SDKs & Libraries', href: '/en/guides/sdk' },
+                    { label: 'Webhooks', href: '/en/guides/webhooks' },
+                    { label: 'Change Logs', href: '/en/changelogs' }
+                ]
+            },
+            {
+                title: 'Company',
+                links: [
+                    { label: 'About Us', href: 'https://www.noqodi.com/en/about' },
+                    { label: 'Careers', href: 'https://www.noqodi.com/en/careers' },
+                    { label: 'Contact', href: 'https://www.noqodi.com/en/contact' },
+                    { label: 'Blog', href: 'https://www.noqodi.com/en/blog' }
+                ]
+            },
+            {
+                title: 'Support',
+                links: [
+                    { label: 'Help Center', href: 'https://support.noqodi.com' },
+                    { label: 'System Status', href: 'https://status.noqodi.com' },
+                    { label: 'Security', href: 'https://www.noqodi.com/en/security' },
+                    { label: 'Privacy Policy', href: 'https://www.noqodi.com/en/privacy' }
+                ]
+            }
+        ],
+        legal: {
+            copyright: `© ${currentYear} noqodi. All rights reserved.`,
+            terms: 'Terms of Service',
+            privacy: 'Privacy Policy',
+            compliance: 'PCI DSS Compliant'
+        },
+        social: {
+            title: 'Follow Us',
+            links: [
+                { platform: 'LinkedIn', href: 'https://linkedin.com/company/noqodi', icon: 'linkedin' },
+                { platform: 'Twitter', href: 'https://twitter.com/noqodiofficial', icon: 'twitter' },
+                { platform: 'GitHub', href: 'https://github.com/noqodi', icon: 'github' }
+            ]
+        }
+    },
+    ar: {
+        company: {
+            name: 'نقودي',
+            description: 'نمكن الشركات بحلول دفع آمنة ومبتكرة عبر الشرق الأوسط وما بعده.',
+            address: 'الإمارات العربية المتحدة، دبي، مركز دبي المالي العالمي'
+        },
+        sections: [
+            {
+                title: 'المنتجات',
+                links: [
+                    { label: 'بوابة الدفع', href: 'https://www.noqodi.com/ar/payment-gateway' },
+                    { label: 'المحفظة الرقمية', href: 'https://www.noqodi.com/ar/digital-wallet' },
+                    { label: 'خدمات التجار', href: 'https://www.noqodi.com/ar/merchant-services' },
+                    { label: 'الحلول المخصصة', href: 'https://www.noqodi.com/ar/white-label' }
+                ]
+            },
+            {
+                title: 'المطورين',
+                links: [
+                    { label: 'وثائق API', href: '/ar/guides' },
+                    { label: 'مجموعات التطوير', href: '/ar/guides/sdk' },
+                    { label: 'الخطافات الشبكية', href: '/ar/guides/webhooks' },
+                    { label: 'سجل التغييرات', href: '/ar/changelogs' }
+                ]
+            },
+            {
+                title: 'الشركة',
+                links: [
+                    { label: 'من نحن', href: 'https://www.noqodi.com/ar/about' },
+                    { label: 'الوظائف', href: 'https://www.noqodi.com/ar/careers' },
+                    { label: 'اتصل بنا', href: 'https://www.noqodi.com/ar/contact' },
+                    { label: 'المدونة', href: 'https://www.noqodi.com/ar/blog' }
+                ]
+            },
+            {
+                title: 'الدعم',
+                links: [
+                    { label: 'مركز المساعدة', href: 'https://support.noqodi.com' },
+                    { label: 'حالة النظام', href: 'https://status.noqodi.com' },
+                    { label: 'الأمان', href: 'https://www.noqodi.com/ar/security' },
+                    { label: 'سياسة الخصوصية', href: 'https://www.noqodi.com/ar/privacy' }
+                ]
+            }
+        ],
+        legal: {
+            copyright: `© ${currentYear} نقودي. جميع الحقوق محفوظة.`,
+            terms: 'شروط الخدمة',
+            privacy: 'سياسة الخصوصية',
+            compliance: 'متوافق مع PCI DSS'
+        },
+        social: {
+            title: 'تابعنا',
+            links: [
+                { platform: 'LinkedIn', href: 'https://linkedin.com/company/noqodi', icon: 'linkedin' },
+                { platform: 'Twitter', href: 'https://twitter.com/noqodiofficial', icon: 'twitter' },
+                { platform: 'GitHub', href: 'https://github.com/noqodi', icon: 'github' }
+            ]
+        }
+    }
+};
+
+const data = footerData[language];
+---
+
+<footer class="site-footer" dir={isRTL ? 'rtl' : 'ltr'}>
+    <div class="footer-container">
+        <!-- First Footer Line: Logo, Quick Links -->
+        <div class="footer-line-1">
+            <div class="footer-logo">
+                <span class="footer-logo-text">{data.company.name}</span>
+            </div>
+            <div class="footer-quick-links">
+                <a href="/en/guides" class="footer-quick-link">API Docs</a>
+                <a href="/en/changelogs" class="footer-quick-link">Changelog</a>
+                <a href="https://www.noqodi.com/en/about" class="footer-quick-link">About</a>
+                <a href="https://support.noqodi.com" class="footer-quick-link">Support</a>
+            </div>
+            <div class="footer-social">
+                {data.social.links.map(social => (
+                    <a href={social.href} 
+                       target="_blank" 
+                       rel="noopener noreferrer" 
+                       class="social-link"
+                       aria-label={social.platform}>
+                        {social.icon === 'linkedin' && (
+                            <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor">
+                                <path d="M20.447 20.452h-3.554v-5.569c0-1.328-.027-3.037-1.852-3.037-1.853 0-2.136 1.445-2.136 2.939v5.667H9.351V9h3.414v1.561h.046c.477-.9 1.637-1.85 3.37-1.85 3.601 0 4.267 2.37 4.267 5.455v6.286zM5.337 7.433c-1.144 0-2.063-.926-2.063-2.065 0-1.138.92-2.063 2.063-2.063 1.14 0 2.064.925 2.064 2.063 0 1.139-.925 2.065-2.064 2.065zm1.782 13.019H3.555V9h3.564v11.452zM22.225 0H1.771C.792 0 0 .774 0 1.729v20.542C0 23.227.792 24 1.771 24h20.451C23.2 24 24 23.227 24 22.271V1.729C24 .774 23.2 0 22.222 0h.003z"/>
+                            </svg>
+                        )}
+                        {social.icon === 'twitter' && (
+                            <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor">
+                                <path d="M23.953 4.57a10 10 0 01-2.825.775 4.958 4.958 0 002.163-2.723c-.951.555-2.005.959-3.127 1.184a4.92 4.92 0 00-8.384 4.482C7.69 8.095 4.067 6.13 1.64 3.162a4.822 4.822 0 00-.666 2.475c0 1.71.87 3.213 2.188 4.096a4.904 4.904 0 01-2.228-.616v.06a4.923 4.923 0 003.946 4.827 4.996 4.996 0 01-2.212.085 4.936 4.936 0 004.604 3.417 9.867 9.867 0 01-6.102 2.105c-.39 0-.779-.023-1.17-.067a13.995 13.995 0 007.557 2.209c9.053 0 13.998-7.496 13.998-13.985 0-.21 0-.42-.015-.63A9.935 9.935 0 0024 4.59z"/>
+                            </svg>
+                        )}
+                        {social.icon === 'github' && (
+                            <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor">
+                                <path d="M12 0c-6.626 0-12 5.373-12 12 0 5.302 3.438 9.8 8.207 11.387.599.111.793-.261.793-.577v-2.234c-3.338.726-4.033-1.416-4.033-1.416-.546-1.387-1.333-1.756-1.333-1.756-1.089-.745.083-.729.083-.729 1.205.084 1.839 1.237 1.839 1.237 1.07 1.834 2.807 1.304 3.492.997.107-.775.418-1.305.762-1.604-2.665-.305-5.467-1.334-5.467-5.931 0-1.311.469-2.381 1.236-3.221-.124-.303-.535-1.524.117-3.176 0 0 1.008-.322 3.301 1.23.957-.266 1.983-.399 3.003-.404 1.02.005 2.047.138 3.006.404 2.291-1.552 3.297-1.23 3.297-1.23.653 1.653.242 2.874.118 3.176.77.84 1.235 1.911 1.235 3.221 0 4.609-2.807 5.624-5.479 5.921.43.372.823 1.102.823 2.222v3.293c0 .319.192.694.801.576 4.765-1.589 8.199-6.086 8.199-11.386 0-6.627-5.373-12-12-12z"/>
+                            </svg>
+                        )}
+                    </a>
+                ))}
+            </div>
+        </div>
+
+        <!-- Second Footer Line: Copyright, Legal Links -->
+        <div class="footer-line-2">
+            <div class="footer-legal">
+                <span class="copyright">{data.legal.copyright}</span>
+                <div class="legal-links">
+                    <a href="https://www.noqodi.com/{language}/terms" class="legal-link">
+                        {data.legal.terms}
+                    </a>
+                    <a href="https://www.noqodi.com/{language}/privacy" class="legal-link">
+                        {data.legal.privacy}
+                    </a>
+                    <span class="compliance-badge">{data.legal.compliance}</span>
+                </div>
+            </div>
+        </div>
+    </div>
+</footer>
+
+<style>
+    /* Ensure full width for footer and prevent double scroll bars */
+    :global(html) {
+        width: 100%;
+        overflow-x: hidden;
+        overflow-y: auto;
+    }
+    
+    :global(body) {
+        width: 100%;
+        overflow-x: hidden;
+        overflow-y: visible;
+    }
+
+    .site-footer {
+        background: linear-gradient(to bottom, #4a90d9 0%, #134074 100%);
+        color: #e2e8f0;
+        width: 100vw;
+        margin-left: calc(-50vw + 50%);
+        margin-right: calc(-50vw + 50%);
+        position: relative;
+        flex-shrink: 0;
+        margin-top: auto;
+    }
+
+    .footer-container {
+        max-width: 1280px;
+        margin: 0 auto;
+        padding: 0 24px;
+        width: 100%;
+        box-sizing: border-box;
+    }
+
+    /* Footer Line 1 - Logo, Quick Links, Social */
+    .footer-line-1 {
+        padding: 16px 0;
+        border-bottom: 1px solid #334155;
+        display: grid;
+        grid-template-columns: auto 1fr auto;
+        align-items: center;
+        gap: 24px;
+    }
+
+    .footer-logo {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+    }
+
+    .footer-logo-image {
+        width: 24px;
+        height: 24px;
+        filter: brightness(0) invert(1);
+    }
+
+    .footer-logo-text {
+        font-size: 18px;
+        font-weight: 700;
+        color: #ffffff;
+    }
+
+    .footer-quick-links {
+        display: flex;
+        gap: 24px;
+        justify-content: center;
+    }
+
+    .footer-quick-link {
+        color: #cbd5e1;
+        text-decoration: none;
+        font-size: 14px;
+        font-weight: 500;
+        transition: color 0.15s ease;
+    }
+
+    .footer-quick-link:hover {
+        color: #ffffff;
+    }
+
+    .footer-social {
+        display: flex;
+        gap: 12px;
+    }
+
+    .social-link {
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        width: 32px;
+        height: 32px;
+        background: #334155;
+        border-radius: 6px;
+        color: #cbd5e1;
+        transition: all 0.15s ease;
+        text-decoration: none;
+    }
+
+    .social-link:hover {
+        background: #635bff;
+        color: #ffffff;
+        transform: translateY(-1px);
+    }
+
+    /* Footer Line 2 - Copyright, Legal */
+    .footer-line-2 {
+        padding: 16px 0;
+    }
+
+    .footer-legal {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        flex-wrap: wrap;
+        gap: 16px;
+        width: 100%;
+    }
+
+    .copyright {
+        color: #94a3b8;
+        font-size: 14px;
+    }
+
+    .legal-links {
+        display: flex;
+        align-items: center;
+        gap: 24px;
+        flex-wrap: wrap;
+    }
+
+    .legal-link {
+        color: #cbd5e1;
+        text-decoration: none;
+        font-size: 14px;
+        transition: color 0.15s ease;
+    }
+
+    .legal-link:hover {
+        color: #ffffff;
+    }
+
+    .compliance-badge {
+        background: #065f46;
+        color: #6ee7b7;
+        padding: 4px 12px;
+        border-radius: 12px;
+        font-size: 12px;
+        font-weight: 600;
+        text-transform: uppercase;
+        letter-spacing: 0.05em;
+    }
+
+
+    /* RTL Styles */
+    [dir="rtl"] .footer-logo {
+        flex-direction: row-reverse;
+    }
+
+    [dir="rtl"] .social-links {
+        flex-direction: row-reverse;
+    }
+
+    [dir="rtl"] .footer-legal {
+        flex-direction: row-reverse;
+    }
+
+    [dir="rtl"] .legal-links {
+        flex-direction: row-reverse;
+    }
+
+    /* Responsive Design */
+    @media (max-width: 768px) {
+        .footer-container {
+            padding: 0 16px;
+        }
+
+
+        .footer-line-1 {
+            grid-template-columns: 1fr;
+            grid-template-rows: auto auto auto;
+            gap: 16px;
+            text-align: center;
+        }
+
+        .footer-quick-links {
+            gap: 16px;
+            flex-wrap: wrap;
+            justify-content: center;
+        }
+
+        .footer-social {
+            justify-content: center;
+        }
+
+        .footer-legal {
+            flex-direction: column;
+            align-items: center;
+            gap: 12px;
+            text-align: center;
+        }
+
+        .legal-links {
+            gap: 16px;
+        }
+    }
+
+    @media (max-width: 640px) {
+        .footer-line-1 {
+            padding: 12px 0;
+        }
+
+        .footer-line-2 {
+            padding: 12px 0;
+        }
+
+        .footer-quick-links {
+            gap: 12px;
+        }
+
+        .footer-quick-link {
+            font-size: 13px;
+        }
+
+        .social-link {
+            width: 28px;
+            height: 28px;
+        }
+
+        .legal-links {
+            flex-wrap: wrap;
+            justify-content: center;
+            gap: 12px;
+        }
+    }
+</style>

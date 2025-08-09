@@ -1,0 +1,1394 @@
+---
+// src/components/Header.astro
+import { getGuideTypes, getApiSpecs, getLanguageOptions, getHeaderContext, generateLanguageUrl } from '../utils/header.ts';
+import HeaderVersionSwitcher from './HeaderVersionSwitcher.astro';
+import AuthenticationProvider from './AuthenticationProvider.astro';
+import DocumentExport from './DocumentExport.astro';
+import { authConfigManager } from '../utils/auth-config.ts';
+
+// Get current context
+const currentPath = Astro.url.pathname;
+const searchParams = Astro.url.searchParams;
+const context = getHeaderContext(currentPath, searchParams);
+
+// Get data for header elements
+const guideTypes = await getGuideTypes(context.language, context.version);
+const apiSpecs = await getApiSpecs(context.language);
+const languageOptions = getLanguageOptions(context.language);
+
+// Get detailed API specs with operations for dropdown using dynamic loader
+const { getApiSpecsForHeader } = await import('../utils/dynamic-openapi.ts');
+const detailedApiSpecs = await getApiSpecsForHeader(context.language, context.version);
+
+// Load authentication configuration
+const authConfig = await authConfigManager.loadConfig();
+
+// Mark active guide tab
+const activeGuideTypes = guideTypes.map(guide => ({
+    ...guide,
+    isActive: guide.id === context.guideType
+}));
+---
+
+<AuthenticationProvider />
+
+<header class="site-header">
+    <!-- First Header Line: Logo, Search, Login -->
+    <div class="header-line-1">
+        <div class="header-container">
+            <!-- Logo -->
+            <div class="header-logo">
+                <a href={`/${context.language}`} class="logo-link">
+                    <img src="/assets/logo.svg" alt="noqodi" class="logo-image" style="filter: brightness(0) invert(1);"/>
+                </a>
+            </div>
+
+            <!-- Search Bar -->
+            <div class="header-search">
+                <div class="search-container">
+                    <input 
+                        type="search" 
+                        id="global-search"
+                        placeholder="Search documentation..."
+                        class="search-input"
+                        autocomplete="off"
+                    />
+                    <button type="button" class="search-button" aria-label="Search">
+                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                            <circle cx="11" cy="11" r="8"></circle>
+                            <path d="M21 21l-4.35-4.35"></path>
+                        </svg>
+                    </button>
+                    <div class="search-shortcut">
+                        <kbd>/</kbd>
+                    </div>
+                </div>
+                
+                <!-- Search Results Dropdown -->
+                <div class="search-results" id="search-results" style="display: none;">
+                    <div class="search-empty">Start typing to search...</div>
+                </div>
+            </div>
+
+            <!-- Authentication Section -->
+            <div class="header-auth">
+                <div class="auth-not-authenticated" id="auth-buttons">
+                    <button class="auth-button login-button" id="login-btn">
+                        {authConfig.ui.loginButtonText[context.language] || 'Sign in'}
+                    </button>
+                </div>
+                
+                <div class="auth-authenticated" id="user-menu" style="display: none;">
+                    <div class="user-dropdown">
+                        <button class="user-dropdown-trigger" type="button" aria-haspopup="true" aria-expanded="false">
+                            <div class="user-avatar" id="user-avatar">
+                                <span id="user-initials">U</span>
+                            </div>
+                            <div class="user-info">
+                                <div class="user-name" id="user-name">User</div>
+                                <div class="user-role" id="user-role">Member</div>
+                            </div>
+                            <svg class="dropdown-arrow" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                <polyline points="6,9 12,15 18,9"></polyline>
+                            </svg>
+                        </button>
+                        <div class="user-dropdown-menu">
+                            <div class="user-dropdown-section">
+                                <div class="dropdown-item user-info-item">
+                                    <div class="user-details">
+                                        <div class="user-full-name" id="user-full-name">User Name</div>
+                                        <div class="user-email" id="user-email">user@example.com</div>
+                                    </div>
+                                </div>
+                            </div>
+                            <div class="user-dropdown-section">
+                                <a href="#" class="dropdown-item">
+                                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                        <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"></path>
+                                        <circle cx="12" cy="7" r="4"></circle>
+                                    </svg>
+                                    Profile Settings
+                                </a>
+                                <a href="#" class="dropdown-item">
+                                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                        <circle cx="12" cy="12" r="3"></circle>
+                                        <path d="m12 1 7 7-7 7-7-7z"></path>
+                                    </svg>
+                                    API Keys
+                                </a>
+                            </div>
+                            <div class="user-dropdown-section">
+                                <button class="dropdown-item logout-item" id="logout-btn">
+                                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                        <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"></path>
+                                        <polyline points="16,17 21,12 16,7"></polyline>
+                                        <line x1="21" y1="12" x2="9" y2="12"></line>
+                                    </svg>
+                                    Sign out
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Second Header Line: Guide Tabs, Language & API Dropdown -->
+    <div class="header-line-2">
+        <div class="header-container">
+            <!-- Guide Tabs -->
+            <nav class="guide-tabs" role="navigation" aria-label="Guide types">
+                {activeGuideTypes.map(guide => (
+                    <a 
+                        href={guide.path}
+                        class={`guide-tab ${guide.isActive ? 'active' : ''}`}
+                        aria-current={guide.isActive ? 'page' : undefined}
+                    >
+                        {guide.label}
+                    </a>
+                ))}
+            </nav>
+
+            <!-- Right Side Controls -->
+            <div class="header-controls">
+                <!-- Version Switcher -->
+                <HeaderVersionSwitcher />
+                
+                <!-- Document Export -->
+                <DocumentExport language={context.language} version={context.version} />
+                
+                <!-- API & SDK Dropdown -->
+                <div class="control-dropdown api-dropdown">
+                    <button class="dropdown-trigger" type="button" aria-haspopup="true" aria-expanded="false">
+                        APIs & SDKs
+                        <svg class="dropdown-arrow" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                            <polyline points="6,9 12,15 18,9"></polyline>
+                        </svg>
+                    </button>
+                    <div class="dropdown-menu">
+                        {detailedApiSpecs.length > 0 ? (
+                            <>
+                                {detailedApiSpecs.map(spec => (
+                                    <div class="dropdown-section">
+                                        <div class="dropdown-label">{spec.serviceName}</div>
+                                        <a href={spec.path} class="dropdown-item">
+                                            <span class="item-title">Overview</span>
+                                            <span class="item-subtitle">API Documentation</span>
+                                        </a>
+                                        {spec.operations.slice(0, 5).map(operation => (
+                                            <a href={operation.path} class="dropdown-item operation-item">
+                                                <span class="item-title">{operation.summary}</span>
+                                                <span class="item-subtitle">Operation: {operation.operationId}</span>
+                                            </a>
+                                        ))}
+                                        {spec.operations.length > 5 && (
+                                            <a href={spec.path} class="dropdown-item view-all">
+                                                <span class="item-title">View all operations</span>
+                                                <span class="item-subtitle">{spec.operations.length} total</span>
+                                            </a>
+                                        )}
+                                    </div>
+                                ))}
+                                <div class="dropdown-section">
+                                    <div class="dropdown-label">SDKs</div>
+                                    <a href="#" class="dropdown-item">
+                                        <span class="item-title">JavaScript SDK</span>
+                                        <span class="item-subtitle">Node.js & Browser</span>
+                                    </a>
+                                    <a href="#" class="dropdown-item">
+                                        <span class="item-title">PHP SDK</span>
+                                        <span class="item-subtitle">Composer package</span>
+                                    </a>
+                                </div>
+                            </>
+                        ) : (
+                            <div class="dropdown-empty">No API specs available</div>
+                        )}
+                    </div>
+                </div>
+
+                <!-- Language Dropdown -->
+                <div class="control-dropdown language-dropdown">
+                    <button class="dropdown-trigger" type="button" aria-haspopup="true" aria-expanded="false">
+                        {languageOptions.find(lang => lang.isActive)?.flag}
+                        {languageOptions.find(lang => lang.isActive)?.label}
+                        <svg class="dropdown-arrow" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                            <polyline points="6,9 12,15 18,9"></polyline>
+                        </svg>
+                    </button>
+                    <div class="dropdown-menu">
+                        {languageOptions.map(lang => (
+                            <a 
+                                href={generateLanguageUrl(currentPath, lang.code)}
+                                class={`dropdown-item ${lang.isActive ? 'active' : ''}`}
+                                aria-current={lang.isActive ? 'page' : undefined}
+                            >
+                                <span class="lang-flag">{lang.flag}</span>
+                                <span class="lang-label">{lang.label}</span>
+                            </a>
+                        ))}
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</header>
+
+<style>
+    .site-header {
+        position: sticky;
+        top: 0;
+        z-index: 1000;
+        background: linear-gradient(to bottom, rgb(13,110,186) 0%, rgb(45,140,216) 100%);
+        backdrop-filter: blur(8px);
+        -webkit-backdrop-filter: blur(8px);
+        overflow: visible;
+    }
+
+    .site-header::before {
+        content: '';
+        position: absolute;
+        top: 0;
+        left: 0;
+        right: 0;
+        bottom: 0;
+        z-index: -1;
+        background-image: 
+            linear-gradient(135deg, transparent 46%, rgba(255,255,255,0.1) 47%, rgba(255,255,255,0.1) 48%, transparent 49%),
+            linear-gradient(135deg, transparent 56%, rgba(255,255,255,0.08) 57%, rgba(255,255,255,0.08) 58%, transparent 59%),
+            linear-gradient(135deg, transparent 66%, rgba(255,255,255,0.06) 67%, rgba(255,255,255,0.06) 68%, transparent 69%);
+        background-size: 60px 60px, 80px 80px, 100px 100px;
+        background-position: 0 0, 20px 20px, 40px 0;
+        opacity: 0.3;
+    }
+
+    .header-container {
+        max-width: 1280px;
+        margin: 0 auto;
+        padding: 0 24px;
+        display: grid;
+        grid-template-columns: auto 1fr auto;
+        align-items: center;
+        gap: 24px;
+        width: 100%;
+    }
+
+    /* Header Line 1 Styles */
+    .header-line-1 {
+        padding: 12px 0;
+        background: transparent;
+    }
+
+    .header-logo {
+        flex-shrink: 0;
+    }
+
+    .logo-link {
+        display: flex;
+        align-items: center;
+        gap: 12px;
+        text-decoration: none;
+        color: #ffffff;
+        font-weight: 700;
+        font-size: 24px;
+        letter-spacing: -0.01em;
+    }
+
+    .logo-image {
+        width: 100px;
+        height: 48px;
+    }
+
+    .logo-text {
+        color: #ffffff;
+    }
+
+    .logo-suffix {
+        color: rgba(255, 255, 255, 0.7);
+        font-size: 14px;
+        font-weight: 500;
+        margin-left: 4px;
+    }
+
+    .header-search {
+        max-width: 420px;
+        margin: 0 auto;
+        position: relative;
+        width: 100%;
+    }
+
+    .search-container {
+        position: relative;
+        display: flex;
+        align-items: center;
+    }
+
+    .search-input {
+        width: 100%;
+        padding: 12px 48px 12px 16px;
+        border: 1px solid rgba(255, 255, 255, 0.3);
+        border-radius: 8px;
+        background: rgba(255, 255, 255, 0.9);
+        color: #0c0c0d;
+        font-size: 14px;
+        font-weight: 400;
+        transition: all 0.15s ease;
+        outline: none;
+    }
+
+    .search-input:focus {
+        background: #ffffff;
+        border-color: #635bff;
+        box-shadow: 0 0 0 3px rgba(99, 91, 255, 0.1);
+    }
+
+    .search-input::placeholder {
+        color: #68768a;
+    }
+
+    .search-button {
+        position: absolute;
+        right: 40px;
+        background: none;
+        border: none;
+        color: #68768a;
+        cursor: pointer;
+        padding: 4px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+    }
+
+    .search-shortcut {
+        position: absolute;
+        right: 12px;
+        pointer-events: none;
+    }
+
+    .search-shortcut kbd {
+        background: #ffffff;
+        border: 1px solid #d4d4d8;
+        border-radius: 4px;
+        padding: 2px 6px;
+        font-size: 12px;
+        color: #68768a;
+        font-weight: 500;
+        box-shadow: 0 1px 1px rgba(0, 0, 0, 0.04);
+    }
+
+    .search-results {
+        position: absolute;
+        top: calc(100% + 8px);
+        left: 0;
+        right: 0;
+        background: #ffffff;
+        border: 1px solid #e6e6e7;
+        border-radius: 8px;
+        box-shadow: 0 8px 24px rgba(0, 0, 0, 0.12);
+        max-height: 400px;
+        overflow-y: auto;
+        z-index: 10001;
+    }
+
+    .search-results-header {
+        padding: 12px 16px;
+        background: #f8fafc;
+        border-bottom: 1px solid #e6e6e7;
+        font-size: 12px;
+        color: #64748b;
+        font-weight: 500;
+    }
+
+    .search-result-item {
+        display: block;
+        padding: 12px 16px;
+        border-bottom: 1px solid #f1f5f9;
+        text-decoration: none;
+        color: inherit;
+        transition: background 0.15s ease;
+    }
+
+    .search-result-item:hover {
+        background: #f8fafc;
+    }
+
+    .search-result-item:last-child {
+        border-bottom: none;
+    }
+
+    .search-result-header {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        margin-bottom: 6px;
+    }
+
+    .search-result-title {
+        font-weight: 500;
+        color: #1e293b;
+        font-size: 14px;
+    }
+
+    .search-result-type {
+        background: #e2e8f0;
+        color: #475569;
+        padding: 2px 6px;
+        border-radius: 3px;
+        font-size: 11px;
+        font-weight: 500;
+        text-transform: uppercase;
+    }
+
+    .search-result-excerpt {
+        color: #64748b;
+        font-size: 13px;
+        line-height: 1.4;
+        margin-bottom: 4px;
+    }
+
+    .search-result-version {
+        color: #94a3b8;
+        font-size: 11px;
+        font-weight: 500;
+    }
+
+    .search-result-options {
+        display: flex;
+        gap: 8px;
+        margin-top: 4px;
+        flex-wrap: wrap;
+    }
+
+    .search-result-option {
+        display: inline-block;
+        padding: 2px 6px;
+        background: #f1f5f9;
+        border: 1px solid #e2e8f0;
+        border-radius: 4px;
+        color: #475569;
+        font-size: 10px;
+        font-weight: 500;
+        text-decoration: none;
+        transition: all 0.15s ease;
+    }
+
+    .search-result-option:hover {
+        background: #e2e8f0;
+        border-color: #cbd5e1;
+        color: #334155;
+    }
+
+    .search-result-option.current {
+        background: #635bff;
+        border-color: #635bff;
+        color: white;
+    }
+
+    .search-result-meta {
+        display: flex;
+        justify-content: space-between;
+        align-items: flex-start;
+        gap: 8px;
+        margin-top: 4px;
+    }
+
+    .search-loading {
+        padding: 16px;
+        text-align: center;
+        color: #64748b;
+        font-size: 14px;
+    }
+
+    .search-empty {
+        padding: 20px 16px;
+        text-align: center;
+        color: #64748b;
+        font-size: 14px;
+        line-height: 1.5;
+    }
+
+    .search-empty small {
+        font-size: 12px;
+        color: #94a3b8;
+    }
+
+    .header-auth {
+        display: flex;
+        gap: 12px;
+        flex-shrink: 0;
+        justify-self: end;
+        position: relative;
+    }
+
+    .auth-not-authenticated {
+        display: flex;
+        gap: 12px;
+    }
+
+    .auth-authenticated {
+        display: flex;
+        align-items: center;
+    }
+
+    .auth-button {
+        padding: 8px 16px;
+        border-radius: 6px;
+        font-size: 14px;
+        font-weight: 500;
+        cursor: pointer;
+        transition: all 0.15s ease;
+        text-decoration: none;
+        border: 1px solid transparent;
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        white-space: nowrap;
+    }
+
+    .login-button {
+        background: #635bff;
+        color: #ffffff;
+        border-color: #635bff;
+        font-weight: 500;
+    }
+
+    .login-button:hover {
+        background: #5a52ff;
+        border-color: #5a52ff;
+        transform: translateY(-1px);
+        box-shadow: 0 4px 12px rgba(99, 91, 255, 0.25);
+    }
+
+    .signup-button {
+        background: #635bff;
+        color: #ffffff;
+        border-color: #635bff;
+        font-weight: 500;
+    }
+
+    .signup-button:hover {
+        background: #5a52ff;
+        border-color: #5a52ff;
+        transform: translateY(-1px);
+        box-shadow: 0 4px 12px rgba(99, 91, 255, 0.25);
+    }
+
+    /* User Dropdown Styles */
+    .user-dropdown {
+        position: relative;
+    }
+
+    .user-dropdown-trigger {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        padding: 6px 12px;
+        background: #ffffff;
+        border: 1px solid #e6e6e7;
+        border-radius: 8px;
+        cursor: pointer;
+        transition: all 0.15s ease;
+        font-size: 14px;
+    }
+
+    .user-dropdown-trigger:hover {
+        border-color: #d4d4d8;
+        box-shadow: 0 2px 4px rgba(0, 0, 0, 0.08);
+    }
+
+    .user-avatar {
+        width: 32px;
+        height: 32px;
+        border-radius: 50%;
+        background: #635bff;
+        color: white;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        font-weight: 600;
+        font-size: 14px;
+        flex-shrink: 0;
+    }
+
+    .user-info {
+        display: flex;
+        flex-direction: column;
+        align-items: flex-start;
+        min-width: 0;
+    }
+
+    .user-name {
+        font-weight: 500;
+        color: #0c0c0d;
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        max-width: 120px;
+    }
+
+    .user-role {
+        font-size: 12px;
+        color: #68768a;
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        max-width: 120px;
+    }
+
+    .user-dropdown-menu {
+        position: absolute;
+        top: calc(100% + 8px);
+        right: 0;
+        min-width: 280px;
+        background: #ffffff;
+        border: 1px solid #e6e6e7;
+        border-radius: 12px;
+        box-shadow: 0 12px 32px rgba(0, 0, 0, 0.15);
+        z-index: 10001;
+        display: none;
+        padding: 8px 0;
+        overflow: hidden;
+    }
+
+    .user-dropdown[aria-expanded="true"] .user-dropdown-menu {
+        display: block;
+    }
+
+    .user-dropdown-section {
+        padding: 4px 0;
+    }
+
+    .user-dropdown-section + .user-dropdown-section {
+        border-top: 1px solid #f4f4f5;
+        margin-top: 4px;
+        padding-top: 8px;
+    }
+
+    .user-info-item {
+        padding: 12px 16px !important;
+        cursor: default !important;
+    }
+
+    .user-details {
+        display: flex;
+        flex-direction: column;
+        gap: 4px;
+    }
+
+    .user-full-name {
+        font-weight: 600;
+        color: #0c0c0d;
+        font-size: 16px;
+    }
+
+    .user-email {
+        color: #68768a;
+        font-size: 14px;
+    }
+
+    .dropdown-item {
+        display: flex;
+        align-items: center;
+        gap: 12px;
+        padding: 10px 16px;
+        color: #0c0c0d;
+        text-decoration: none;
+        font-size: 14px;
+        font-weight: 400;
+        transition: background 0.15s ease;
+        border: none;
+        background: none;
+        width: 100%;
+        text-align: left;
+        cursor: pointer;
+    }
+
+    .dropdown-item:hover {
+        background: #f8fafc;
+    }
+
+    .logout-item {
+        color: #dc2626 !important;
+    }
+
+    .logout-item:hover {
+        background: #fef2f2 !important;
+    }
+
+    /* Header Line 2 Styles */
+    .header-line-2 {
+        padding: 8px 0;
+        background: transparent;
+    }
+    
+    .header-line-2 .header-container {
+        display: grid;
+        grid-template-columns: 1fr auto;
+        gap: 24px;
+    }
+
+    .guide-tabs {
+        display: flex;
+        gap: 4px;
+        align-items: center;
+    }
+
+    .guide-tab {
+        padding: 8px 12px;
+        text-decoration: none;
+        color: rgba(255, 255, 255, 0.8);
+        font-size: 14px;
+        font-weight: 500;
+        border-radius: 6px;
+        transition: all 0.15s ease;
+        border: 1px solid transparent;
+        position: relative;
+    }
+
+    .guide-tab:hover {
+        color: #0c0c0d;
+        background: rgba(255, 255, 255, 0.9);
+    }
+
+    .guide-tab.active {
+        color: #0c0c0d;
+        background: rgba(255, 255, 255, 0.95);
+        border-color: rgba(255, 255, 255, 0.3);
+        font-weight: 500;
+        box-shadow: 0 1px 3px rgba(0, 0, 0, 0.2);
+    }
+
+    .header-controls {
+        display: flex;
+        gap: 8px;
+        align-items: center;
+        position: relative;
+        z-index: 10000;
+    }
+
+    .control-dropdown {
+        position: relative;
+        z-index: 10000;
+    }
+
+    .dropdown-trigger {
+        display: flex;
+        align-items: center;
+        gap: 6px;
+        padding: 8px 12px;
+        background: rgba(255, 255, 255, 0.9);
+        border: 1px solid rgba(255, 255, 255, 0.3);
+        border-radius: 6px;
+        color: #68768a;
+        font-size: 14px;
+        font-weight: 500;
+        cursor: pointer;
+        transition: all 0.15s ease;
+    }
+
+    .dropdown-trigger:hover {
+        border-color: rgba(255, 255, 255, 0.5);
+        color: #0c0c0d;
+        background: rgba(255, 255, 255, 0.95);
+        box-shadow: 0 2px 4px rgba(0, 0, 0, 0.15);
+    }
+
+    .dropdown-arrow {
+        transition: transform 0.15s ease;
+    }
+
+    .control-dropdown[aria-expanded="true"] .dropdown-arrow {
+        transform: rotate(180deg);
+    }
+
+    .dropdown-menu {
+        position: absolute;
+        top: calc(100% + 4px);
+        right: 0;
+        min-width: 240px;
+        background: #ffffff;
+        border: 1px solid #e6e6e7;
+        border-radius: 8px;
+        box-shadow: 0 8px 24px rgba(0, 0, 0, 0.12);
+        z-index: 10001;
+        display: none;
+        padding: 8px 0;
+    }
+
+    .control-dropdown[aria-expanded="true"] .dropdown-menu {
+        display: block;
+    }
+
+    .dropdown-section {
+        padding: 6px 0;
+    }
+
+    .dropdown-section + .dropdown-section {
+        border-top: 1px solid #f4f4f5;
+        margin-top: 6px;
+        padding-top: 12px;
+    }
+
+    .dropdown-label {
+        padding: 4px 16px 8px;
+        font-size: 12px;
+        font-weight: 600;
+        color: #68768a;
+        text-transform: uppercase;
+        letter-spacing: 0.05em;
+    }
+
+    .dropdown-item {
+        display: block;
+        padding: 8px 16px;
+        color: #0c0c0d;
+        text-decoration: none;
+        font-size: 14px;
+        font-weight: 400;
+        transition: background 0.15s ease;
+        border-radius: 0;
+    }
+
+    .dropdown-item:hover {
+        background: #f4f4f5;
+    }
+
+    .dropdown-item.active {
+        background: #f0f0ff;
+        color: #635bff;
+    }
+
+    .item-title {
+        display: block;
+        font-weight: 500;
+        line-height: 1.4;
+    }
+
+    .item-subtitle {
+        display: block;
+        font-size: 12px;
+        color: #68768a;
+        margin-top: 2px;
+        line-height: 1.3;
+    }
+
+    .lang-flag {
+        margin-right: 8px;
+    }
+
+    .dropdown-empty {
+        padding: 16px;
+        text-align: center;
+        color: #68768a;
+        font-style: italic;
+        font-size: 14px;
+    }
+
+    .operation-item {
+        padding-left: 24px;
+        border-left: 2px solid #f0f0ff;
+        margin-left: 16px;
+        margin-right: 4px;
+        border-radius: 0 4px 4px 0;
+    }
+
+    .operation-item:hover {
+        border-left-color: #635bff;
+        background: #f0f0ff;
+    }
+
+    .view-all {
+        font-style: italic;
+        background: #f4f4f5;
+        color: #68768a;
+    }
+
+    .dropdown-menu {
+        max-height: 400px;
+        overflow-y: auto;
+    }
+
+    /* RTL Support for Navigation */
+    [dir="rtl"] .header-container {
+        grid-template-columns: auto 1fr auto;
+    }
+    
+    [dir="rtl"] .header-line-2 .header-container {
+        grid-template-columns: auto 1fr;
+    }
+    
+    [dir="rtl"] .header-controls {
+        order: -1;
+        justify-self: start;
+    }
+    
+    [dir="rtl"] .guide-tabs {
+        justify-self: end;
+        direction: rtl;
+    }
+    
+    [dir="rtl"] .guide-tab {
+        direction: ltr;
+        text-align: center;
+    }
+    
+    /* RTL Search */
+    [dir="rtl"] .search-input {
+        padding: 12px 16px 12px 48px;
+        text-align: right;
+    }
+    
+    [dir="rtl"] .search-button {
+        left: 40px;
+        right: auto;
+    }
+    
+    [dir="rtl"] .search-shortcut {
+        left: 12px;
+        right: auto;
+    }
+    
+    [dir="rtl"] .search-results {
+        text-align: right;
+    }
+    
+    /* RTL Dropdowns */
+    [dir="rtl"] .dropdown-menu {
+        left: 0;
+        right: auto;
+    }
+    
+    [dir="rtl"] .user-dropdown-menu {
+        left: 0;
+        right: auto;
+    }
+    
+    [dir="rtl"] .dropdown-item {
+        text-align: right;
+        flex-direction: row-reverse;
+    }
+    
+    [dir="rtl"] .lang-flag {
+        margin-right: 0;
+        margin-left: 8px;
+    }
+    
+    [dir="rtl"] .operation-item {
+        padding-right: 24px;
+        padding-left: 8px;
+        border-right: 2px solid #f0f0ff;
+        border-left: none;
+        margin-right: 16px;
+        margin-left: 4px;
+        border-radius: 4px 0 0 4px;
+    }
+    
+    [dir="rtl"] .operation-item:hover {
+        border-right-color: #635bff;
+        border-left-color: transparent;
+    }
+    
+    /* RTL User dropdown */
+    [dir="rtl"] .user-info {
+        align-items: flex-end;
+    }
+    
+    [dir="rtl"] .dropdown-item {
+        gap: 12px;
+    }
+    
+    [dir="rtl"] .dropdown-item svg {
+        order: 2;
+    }
+
+    /* Responsive Design */
+    @media (max-width: 768px) {
+        .header-container {
+            padding: 0 16px;
+            gap: 16px;
+        }
+
+        .header-search {
+            margin: 0;
+            max-width: 320px;
+        }
+
+        .logo-image {
+            width: 42px;
+            height: 42px;
+        }
+
+        .logo-link {
+            font-size: 22px;
+            gap: 10px;
+        }
+
+        .guide-tabs {
+            gap: 2px;
+            overflow-x: auto;
+            scrollbar-width: none;
+            -ms-overflow-style: none;
+            padding-bottom: 2px;
+        }
+
+        .guide-tabs::-webkit-scrollbar {
+            display: none;
+        }
+
+        .guide-tab {
+            padding: 6px 10px;
+            font-size: 13px;
+            white-space: nowrap;
+        }
+
+        .header-controls {
+            gap: 6px;
+        }
+
+        .auth-button {
+            padding: 6px 12px;
+            font-size: 13px;
+        }
+        
+        .dropdown-trigger {
+            padding: 6px 10px;
+            font-size: 13px;
+        }
+    }
+
+    @media (max-width: 640px) {
+        .header-line-1 {
+            padding: 12px 0;
+        }
+        
+        .header-line-1 .header-container {
+            grid-template-columns: 1fr;
+            grid-template-rows: auto auto auto;
+            gap: 12px;
+            text-align: center;
+        }
+        
+        .header-logo {
+            justify-self: center;
+        }
+
+        .logo-image {
+            width: 36px;
+            height: 36px;
+        }
+
+        .logo-link {
+            font-size: 20px;
+            gap: 8px;
+        }
+
+        .header-search {
+            justify-self: center;
+            width: 100%;
+            max-width: none;
+        }
+        
+        .header-auth {
+            justify-self: center;
+        }
+
+        .logo-suffix {
+            display: none;
+        }
+        
+        .header-line-2 {
+            padding: 8px 0;
+        }
+        
+        .header-line-2 .header-container {
+            gap: 16px;
+        }
+        
+        /* RTL Mobile adjustments */
+        [dir="rtl"] .header-line-2 .header-container {
+            grid-template-columns: 1fr auto;
+        }
+        
+        [dir="rtl"] .guide-tabs {
+            justify-self: start;
+            order: 2;
+        }
+        
+        [dir="rtl"] .header-controls {
+            justify-self: end;
+            order: 1;
+        }
+    }
+</style>
+
+<script>
+    // Dropdown functionality
+    document.addEventListener('DOMContentLoaded', () => {
+        const dropdowns = document.querySelectorAll('.control-dropdown');
+        const userDropdown = document.querySelector('.user-dropdown');
+        
+        // Handle control dropdowns (API & Language)
+        dropdowns.forEach(dropdown => {
+            const trigger = dropdown.querySelector('.dropdown-trigger');
+            const menu = dropdown.querySelector('.dropdown-menu');
+            
+            if (trigger && menu) {
+                trigger.addEventListener('click', (e) => {
+                    e.stopPropagation();
+                    const isOpen = dropdown.getAttribute('aria-expanded') === 'true';
+                    
+                    // Close all other dropdowns
+                    dropdowns.forEach(d => d.setAttribute('aria-expanded', 'false'));
+                    if (userDropdown) userDropdown.setAttribute('aria-expanded', 'false');
+                    
+                    // Toggle current dropdown
+                    dropdown.setAttribute('aria-expanded', isOpen ? 'false' : 'true');
+                });
+            }
+        });
+
+        // Handle user dropdown
+        if (userDropdown) {
+            const userTrigger = userDropdown.querySelector('.user-dropdown-trigger');
+            const userMenu = userDropdown.querySelector('.user-dropdown-menu');
+            
+            if (userTrigger && userMenu) {
+                userTrigger.addEventListener('click', (e) => {
+                    e.stopPropagation();
+                    const isOpen = userDropdown.getAttribute('aria-expanded') === 'true';
+                    
+                    // Close all other dropdowns
+                    dropdowns.forEach(d => d.setAttribute('aria-expanded', 'false'));
+                    
+                    // Toggle user dropdown
+                    userDropdown.setAttribute('aria-expanded', isOpen ? 'false' : 'true');
+                });
+            }
+        }
+        
+        // Close dropdowns when clicking outside
+        document.addEventListener('click', () => {
+            dropdowns.forEach(dropdown => {
+                dropdown.setAttribute('aria-expanded', 'false');
+            });
+            if (userDropdown) userDropdown.setAttribute('aria-expanded', 'false');
+        });
+
+        // Search functionality
+        const searchInput = document.getElementById('global-search');
+        const searchResults = document.getElementById('search-results');
+        
+        if (searchInput && searchResults) {
+            let searchTimeout;
+            
+            searchInput.addEventListener('input', async (e) => {
+                const query = e.target.value.trim();
+                
+                // Clear previous timeout
+                if (searchTimeout) {
+                    clearTimeout(searchTimeout);
+                }
+                
+                if (query.length < 2) {
+                    searchResults.style.display = 'none';
+                    return;
+                }
+                
+                searchResults.style.display = 'block';
+                searchResults.innerHTML = '<div class="search-loading">Searching...</div>';
+                
+                // Debounce search
+                searchTimeout = setTimeout(async () => {
+                    try {
+                        const response = await fetch(`/api/search?q=${encodeURIComponent(query)}&lang=${window.location.pathname.split('/')[1] || 'en'}`);
+                        if (response.ok) {
+                            const results = await response.json();
+                            displaySearchResults(results, query);
+                        } else {
+                            throw new Error('Search failed');
+                        }
+                    } catch (error) {
+                        console.error('Search error:', error);
+                        searchResults.innerHTML = `
+                            <div class="search-empty">
+                                Search temporarily unavailable. 
+                                <br><small>Please try again later or browse the guides.</small>
+                            </div>
+                        `;
+                    }
+                }, 300);
+            });
+            
+            function displaySearchResults(results, query) {
+                if (!results || results.length === 0) {
+                    searchResults.innerHTML = `
+                        <div class="search-empty">
+                            No results found for "${query}". 
+                            <br><small>Try different keywords or browse the guides.</small>
+                        </div>
+                    `;
+                    return;
+                }
+                
+                const currentLang = window.location.pathname.split('/')[1] || 'en';
+                
+                const resultsHTML = results.map(result => {
+                    let optionsHTML = '';
+                    
+                    // Build version options
+                    if (result.availableVersions && result.availableVersions.length > 1) {
+                        const versionOptions = result.availableVersions.map(version => {
+                            const versionPath = result.path.includes('?version=') 
+                                ? result.path.replace(/\?version=[^&]*/, `?version=${version}`)
+                                : result.path + `?version=${version}`;
+                            const isCurrent = result.version === version;
+                            return `<a href="${versionPath}" class="search-result-option ${isCurrent ? 'current' : ''}" onclick="event.stopPropagation()">v${version}</a>`;
+                        }).join('');
+                        optionsHTML += versionOptions;
+                    }
+                    
+                    // Build language options
+                    if (result.availableLanguages && result.availableLanguages.length > 1) {
+                        const langOptions = result.availableLanguages.map(lang => {
+                            const langPath = result.path.replace(`/${currentLang}/`, `/${lang}/`);
+                            const isCurrent = lang === currentLang;
+                            const langLabel = lang === 'en' ? 'EN' : lang === 'ar' ? 'AR' : lang.toUpperCase();
+                            return `<a href="${langPath}" class="search-result-option ${isCurrent ? 'current' : ''}" onclick="event.stopPropagation()">${langLabel}</a>`;
+                        }).join('');
+                        optionsHTML += langOptions;
+                    }
+                    
+                    return `
+                        <a href="${result.path}" class="search-result-item">
+                            <div class="search-result-header">
+                                <span class="search-result-title">${result.title}</span>
+                                <span class="search-result-type">${result.type}</span>
+                            </div>
+                            <div class="search-result-excerpt">${result.excerpt}</div>
+                            <div class="search-result-meta">
+                                ${result.version ? `<div class="search-result-version">Version: ${result.version}</div>` : ''}
+                                ${optionsHTML ? `<div class="search-result-options">${optionsHTML}</div>` : ''}
+                            </div>
+                        </a>
+                    `;
+                }).join('');
+                
+                searchResults.innerHTML = `
+                    <div class="search-results-header">
+                        Found ${results.length} result${results.length === 1 ? '' : 's'} for "${query}"
+                    </div>
+                    ${resultsHTML}
+                `;
+            }
+            
+            // Hide search results when clicking outside
+            document.addEventListener('click', (e) => {
+                if (!searchInput.contains(e.target) && !searchResults.contains(e.target)) {
+                    searchResults.style.display = 'none';
+                }
+            });
+            
+            // Keyboard shortcut to focus search
+            document.addEventListener('keydown', (e) => {
+                if (e.key === '/' && !e.ctrlKey && !e.metaKey && !e.altKey) {
+                    const activeElement = document.activeElement;
+                    if (activeElement && ['INPUT', 'TEXTAREA'].includes(activeElement.tagName)) {
+                        return;
+                    }
+                    
+                    e.preventDefault();
+                    searchInput.focus();
+                }
+            });
+        }
+
+        // Authentication functionality
+        const loginBtn = document.getElementById('login-btn');
+        const signupBtn = document.getElementById('signup-btn');
+        const logoutBtn = document.getElementById('logout-btn');
+        const authButtons = document.getElementById('auth-buttons');
+        const userMenu = document.getElementById('user-menu');
+
+        function updateAuthUI(user) {
+            if (user) {
+                // User is authenticated
+                if (authButtons) authButtons.style.display = 'none';
+                if (userMenu) userMenu.style.display = 'block';
+                
+                // Update user info
+                const userInitials = document.getElementById('user-initials');
+                const userName = document.getElementById('user-name');
+                const userRole = document.getElementById('user-role');
+                const userFullName = document.getElementById('user-full-name');
+                const userEmail = document.getElementById('user-email');
+                
+                const initials = user.username ? 
+                    user.username.substring(0, 2).toUpperCase() : 
+                    user.email.substring(0, 2).toUpperCase();
+                
+                const displayName = user.username || user.email.split('@')[0];
+                const primaryRole = user.roles && user.roles.length > 0 ? 
+                    user.roles[0].replace('_', ' ').toLowerCase().replace(/\b\w/g, l => l.toUpperCase()) : 
+                    'Member';
+                
+                if (userInitials) userInitials.textContent = initials;
+                if (userName) userName.textContent = displayName;
+                if (userRole) userRole.textContent = primaryRole;
+                if (userFullName) userFullName.textContent = user.username || user.email;
+                if (userEmail) userEmail.textContent = user.email;
+                
+            } else {
+                // User is not authenticated
+                if (authButtons) authButtons.style.display = 'flex';
+                if (userMenu) userMenu.style.display = 'none';
+            }
+        }
+
+        // Handle login button click
+        if (loginBtn) {
+            loginBtn.addEventListener('click', () => {
+                if (window.noqodiAuth) {
+                    window.noqodiAuth.login();
+                }
+            });
+        }
+
+        // Handle signup button click (same as login for now)
+        if (signupBtn) {
+            signupBtn.addEventListener('click', () => {
+                if (window.noqodiAuth) {
+                    window.noqodiAuth.login();
+                }
+            });
+        }
+
+        // Handle logout button click
+        if (logoutBtn) {
+            logoutBtn.addEventListener('click', () => {
+                if (window.noqodiAuth) {
+                    window.noqodiAuth.logout();
+                }
+            });
+        }
+
+        // Listen for authentication events
+        window.addEventListener('auth:initialized', (event) => {
+            updateAuthUI(event.detail?.user);
+        });
+
+        window.addEventListener('auth:login', (event) => {
+            updateAuthUI(event.detail?.user);
+        });
+
+        window.addEventListener('auth:logout', () => {
+            updateAuthUI(null);
+        });
+
+        // Check initial auth state
+        if (window.noqodiAuth) {
+            const user = window.noqodiAuth.getUser();
+            updateAuthUI(user);
+        }
+    });
+</script>

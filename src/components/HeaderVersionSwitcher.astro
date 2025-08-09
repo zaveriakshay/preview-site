@@ -1,0 +1,232 @@
+---
+import { getAvailableVersions, parseCurrentPath, generateVersionPath } from '../utils/versions.ts';
+import { getApiVersions, parseApiPath, generateApiVersionPath } from '../utils/api-versions.ts';
+import { getHeaderContext } from '../utils/header.ts';
+
+const currentPath = Astro.url.pathname;
+const context = getHeaderContext(currentPath);
+
+let availableVersions: Array<{version: string; label: string; badge?: string}> = [];
+let currentVersion = 'v2';
+let getVersionUrl: (version: string) => string = () => '';
+
+if (context.isApiPage) {
+    const apiPathInfo = parseApiPath(currentPath);
+    currentVersion = apiPathInfo.version;
+    availableVersions = await getApiVersions(apiPathInfo.serviceName || 'unknown', context.language);
+    getVersionUrl = (version: string) => generateApiVersionPath(currentPath, version);
+} else {
+    const pathInfo = parseCurrentPath(currentPath);
+    currentVersion = pathInfo.version;
+    availableVersions = await getAvailableVersions(context.language, context.guideType);
+    getVersionUrl = (version: string) => generateVersionPath(currentPath, version);
+}
+
+const isVersionAvailable = availableVersions.length > 1;
+---
+
+{isVersionAvailable && (
+    <div class="header-version-switcher">
+        <button class="version-trigger" type="button" aria-haspopup="true" aria-expanded="false">
+            <span class="version-label">
+                {availableVersions.find(v => v.version === currentVersion)?.label || currentVersion}
+            </span>
+            <svg class="version-arrow" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <polyline points="6,9 12,15 18,9"></polyline>
+            </svg>
+        </button>
+        <div class="version-menu">
+            {availableVersions.map(version => (
+                <a 
+                    href={getVersionUrl(version.version)}
+                    class={`version-item ${version.version === currentVersion ? 'active' : ''}`}
+                    aria-current={version.version === currentVersion ? 'page' : undefined}
+                >
+                    <span class="version-name">{version.version}</span>
+                    {version.badge && (
+                        <span class={`version-badge ${version.badge.toLowerCase()}`}>
+                            {version.badge}
+                        </span>
+                    )}
+                </a>
+            ))}
+        </div>
+    </div>
+)}
+
+<style>
+    .header-version-switcher {
+        position: relative;
+        display: flex;
+        align-items: center;
+    }
+
+    .version-trigger {
+        display: flex;
+        align-items: center;
+        gap: 6px;
+        padding: 8px 12px;
+        background: #ffffff;
+        border: 1px solid #e6e6e7;
+        border-radius: 6px;
+        color: #68768a;
+        font-size: 14px;
+        font-weight: 500;
+        cursor: pointer;
+        transition: all 0.15s ease;
+        min-width: 80px;
+        justify-content: space-between;
+    }
+
+    .version-trigger:hover {
+        border-color: #d4d4d8;
+        color: #0c0c0d;
+        box-shadow: 0 2px 4px rgba(0, 0, 0, 0.08);
+    }
+
+    .version-label {
+        font-weight: 500;
+        white-space: nowrap;
+    }
+
+    .version-arrow {
+        transition: transform 0.15s ease;
+        flex-shrink: 0;
+    }
+
+    .header-version-switcher[aria-expanded="true"] .version-arrow {
+        transform: rotate(180deg);
+    }
+
+    .version-menu {
+        position: absolute;
+        top: calc(100% + 4px);
+        right: 0;
+        min-width: 160px;
+        background: #ffffff;
+        border: 1px solid #e6e6e7;
+        border-radius: 8px;
+        box-shadow: 0 8px 24px rgba(0, 0, 0, 0.12);
+        z-index: 10001;
+        display: none;
+        padding: 8px 0;
+        max-height: 240px;
+        overflow-y: auto;
+    }
+
+    .header-version-switcher[aria-expanded="true"] .version-menu {
+        display: block;
+    }
+
+    .version-item {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        padding: 10px 16px;
+        color: #0c0c0d;
+        text-decoration: none;
+        font-size: 14px;
+        font-weight: 400;
+        transition: background 0.15s ease;
+        gap: 8px;
+    }
+
+    .version-item:hover {
+        background: #f4f4f5;
+    }
+
+    .version-item.active {
+        background: #f0f0ff;
+        color: #635bff;
+        font-weight: 500;
+    }
+
+    .version-name {
+        flex: 1;
+        font-weight: inherit;
+    }
+
+    .version-badge {
+        font-size: 11px;
+        font-weight: 600;
+        text-transform: uppercase;
+        letter-spacing: 0.02em;
+        padding: 2px 6px;
+        border-radius: 3px;
+        border: 1px solid;
+    }
+
+    .version-badge.latest {
+        background: #dcfce7;
+        color: #166534;
+        border-color: #bbf7d0;
+    }
+
+    .version-badge.legacy {
+        background: #fef3c7;
+        color: #92400e;
+        border-color: #fed7aa;
+    }
+
+    .version-badge.stable {
+        background: #e0f2fe;
+        color: #0c4a6e;
+        border-color: #bae6fd;
+    }
+
+    /* Responsive adjustments */
+    @media (max-width: 768px) {
+        .version-trigger {
+            padding: 6px 10px;
+            font-size: 13px;
+            min-width: 70px;
+        }
+
+        .version-menu {
+            right: -20px;
+            left: -20px;
+            min-width: auto;
+        }
+
+        .version-item {
+            padding: 8px 16px;
+            font-size: 13px;
+        }
+    }
+</style>
+
+<script>
+    document.addEventListener('DOMContentLoaded', () => {
+        const versionSwitcher = document.querySelector('.header-version-switcher');
+        
+        if (versionSwitcher) {
+            const trigger = versionSwitcher.querySelector('.version-trigger');
+            const menu = versionSwitcher.querySelector('.version-menu');
+            
+            if (trigger && menu) {
+                trigger.addEventListener('click', (e) => {
+                    e.stopPropagation();
+                    const isOpen = versionSwitcher.getAttribute('aria-expanded') === 'true';
+                    
+                    // Close all other dropdowns
+                    document.querySelectorAll('.header-version-switcher').forEach(switcher => {
+                        switcher.setAttribute('aria-expanded', 'false');
+                    });
+                    document.querySelectorAll('.control-dropdown').forEach(dropdown => {
+                        dropdown.setAttribute('aria-expanded', 'false');
+                    });
+                    
+                    // Toggle current dropdown
+                    versionSwitcher.setAttribute('aria-expanded', isOpen ? 'false' : 'true');
+                });
+            }
+        }
+        
+        // Close version switcher when clicking outside
+        document.addEventListener('click', () => {
+            document.querySelectorAll('.header-version-switcher').forEach(switcher => {
+                switcher.setAttribute('aria-expanded', 'false');
+            });
+        });
+    });
+</script>

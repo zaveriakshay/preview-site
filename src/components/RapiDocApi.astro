@@ -1,0 +1,1313 @@
+---
+// src/components/RapiDocApi.astro
+// Modern RapiDoc API documentation component with GitBook-style design
+export interface Props {
+    specUrl: string;
+    language?: string;
+}
+
+const { specUrl, language } = Astro.props;
+
+// Ensure the spec URL is absolute
+const absoluteSpecUrl = specUrl.startsWith('http') 
+    ? specUrl 
+    : `${Astro.url.origin}${specUrl}`;
+
+// Detect if current language is RTL
+const isRTL = language === 'ar';
+const direction = isRTL ? 'rtl' : 'ltr';
+---
+
+<div id="rapidoc-container" class={`rapidoc-wrapper ${isRTL ? 'rtl' : 'ltr'}`} dir={direction}>
+    <rapi-doc
+        id="rapidoc-element"
+        spec-url={absoluteSpecUrl}
+        render-style="read"
+        style="--resp-area-height:400px; --font-size-small:12px; height: 100%; width: 100%;"
+        theme="light"
+        layout="row"
+        schema-style="tree"
+        show-header="true"
+        show-sidebar="true"
+        show-info="true"
+        show-components="true"
+        allow-try="true"
+        allow-search="true"
+        allow-advanced-search="true"
+        allow-spec-url-load="false"
+        allow-spec-file-load="false"
+        show-curl-before-try="true"
+        default-schema-tab="model"
+        response-area-height="400px"
+        nav-item-spacing="relaxed"
+        use-path-in-nav-bar="true"
+        info-description-headings-in-navbar="true"
+        show-method-in-nav-bar="as-colored-text"
+        sort-tags="false"
+        sort-endpoints-by="path"
+        fill-request-fields-with-example="true"
+        persist-auth="true"
+        nav-bg-color="#fafbfc"
+        nav-text-color="#64748b"
+        nav-hover-bg-color="#f1f5f9"
+        nav-hover-text-color="#1e293b"
+        nav-accent-color="#3b82f6"
+        bg-color="#ffffff"
+        text-color="#1e293b"
+        header-color="#f8fafc"
+        primary-color="#3b82f6"
+        font-regular="system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif"
+        font-mono="'SFMono-Regular', Consolas, 'Liberation Mono', Menlo, monospace"
+        load-fonts="false"
+        get-color="#10b981"
+        post-color="#3b82f6"
+        put-color="#f59e0b"
+        delete-color="#ef4444"
+        patch-color="#8b5cf6"
+        head-color="#6b7280"
+        options-color="#6b7280"
+        regular-font-size="14px"
+        mono-font-size="13px"
+        nav-item-font-size="13px"
+        show-curl="true"
+        show-example="true"
+        default-api-server="https://api-dev02.noqodi.com"
+        api-key-name="Authorization"
+        api-key-location="header"
+        api-key-value=""
+        update-route="false"
+        route-prefix=""
+        goto-path=""
+        fetch-credentials="same-origin"
+    >
+        <div slot="logo" style="display: flex; align-items: center; padding: 12px;">
+            <span style="font-size: 1.25rem; font-weight: 600; color: #1e293b;">API Documentation</span>
+        </div>
+    </rapi-doc>
+</div>
+
+<!-- Load RapiDoc script -->
+<script src="https://unpkg.com/rapidoc/dist/rapidoc-min.js" type="module"></script>
+
+<script>
+    // Multi-language code snippet generator with dynamic operation data
+    function generateCodeSnippet(language, method, url, headers = {}, body = null, parameters = {}, contentType = 'application/json') {
+        const defaultHeaders = {
+            'Content-Type': contentType,
+            'Authorization': 'Bearer YOUR_ACCESS_TOKEN',
+            ...headers
+        };
+        
+        // Add query parameters to URL if present
+        let finalUrl = url;
+        if (parameters.query && Object.keys(parameters.query).length > 0) {
+            const queryParams = new URLSearchParams(parameters.query).toString();
+            finalUrl = `${url}${url.includes('?') ? '&' : '?'}${queryParams}`;
+        }
+        
+        // Replace path parameters in URL
+        if (parameters.path && Object.keys(parameters.path).length > 0) {
+            Object.entries(parameters.path).forEach(([key, value]) => {
+                finalUrl = finalUrl.replace(`{${key}}`, value);
+            });
+        }
+        
+        const headersStr = Object.entries(defaultHeaders)
+            .map(([key, value]) => `${key}: ${value}`)
+            .join('\\n  ');
+        
+        // Handle different content types for body encoding
+        let bodyStr = '';
+        if (body) {
+            if (contentType.includes('form-urlencoded')) {
+                // Convert object to form data
+                if (typeof body === 'object') {
+                    bodyStr = new URLSearchParams(body).toString();
+                } else {
+                    bodyStr = body;
+                }
+            } else {
+                // Default to JSON
+                bodyStr = typeof body === 'string' ? body : JSON.stringify(body, null, 2);
+            }
+        }
+        
+        switch (language) {
+            case 'curl':
+                let curlCmd = `curl -X ${method} "${finalUrl}"`;
+                Object.entries(defaultHeaders).forEach(([key, value]) => {
+                    curlCmd += ` \\\n  -H "${key}: ${value}"`;
+                });
+                if (body) {
+                    curlCmd += ` \\\n  -d '${bodyStr}'`;
+                }
+                return curlCmd;
+                
+            case 'javascript':
+                return `const response = await fetch('${finalUrl}', {
+  method: '${method}',
+  headers: {
+    ${Object.entries(defaultHeaders).map(([k,v]) => `'${k}': '${v}'`).join(',\\n    ')}
+  }${body ? `,\\n  body: JSON.stringify(${bodyStr})` : ''}
+});
+
+const data = await response.json();
+console.log(data);`;
+
+            case 'python':
+                return `import requests
+import json
+
+url = "${finalUrl}"
+headers = {
+    ${Object.entries(defaultHeaders).map(([k,v]) => `"${k}": "${v}"`).join(',\\n    ')}
+}
+${body ? `data = ${bodyStr}` : ''}
+
+response = requests.${method.toLowerCase()}(url, headers=headers${body ? ', json=data' : ''})
+print(response.json())`;
+
+            case 'java':
+                return `import java.net.http.*;
+import java.net.URI;
+
+HttpClient client = HttpClient.newDefaultClient();
+HttpRequest request = HttpRequest.newBuilder()
+    .uri(URI.create("${finalUrl}"))
+    .${method}(${body ? `HttpRequest.BodyPublishers.ofString("${bodyStr.replace(/"/g, '\\"')}")` : 'HttpRequest.BodyPublishers.noBody()'})
+    ${Object.entries(defaultHeaders).map(([k,v]) => `.header("${k}", "${v}")`).join('\\n    ')}
+    .build();
+
+HttpResponse<String> response = client.send(request, HttpResponse.BodyHandlers.ofString());
+System.out.println(response.body());`;
+
+            case 'csharp':
+                return `using System;
+using System.Net.Http;
+using System.Text;
+using System.Threading.Tasks;
+
+var client = new HttpClient();
+${Object.entries(defaultHeaders).map(([k,v]) => `client.DefaultRequestHeaders.Add("${k}", "${v}");`).join('\\n')}
+
+${body ? `var json = @"${bodyStr}";\\nvar content = new StringContent(json, Encoding.UTF8, "application/json");` : ''}
+
+var response = await client.${method === 'GET' ? 'GetAsync' : method === 'POST' ? 'PostAsync' : method + 'Async'}("${finalUrl}"${body ? ', content' : ''});
+var result = await response.Content.ReadAsStringAsync();
+Console.WriteLine(result);`;
+
+            case 'php':
+                return `<?php
+$url = "${finalUrl}";
+$headers = [
+    ${Object.entries(defaultHeaders).map(([k,v]) => `"${k}: ${v}"`).join(',\\n    ')}
+];
+
+$options = [
+    'http' => [
+        'method' => '${method}',
+        'header' => implode("\\\\r\\\\n", $headers),
+        ${body ? `'content' => '${bodyStr}'` : ''}
+    ]
+];
+
+$context = stream_context_create($options);
+$result = file_get_contents($url, false, $context);
+echo $result;
+?>`;
+
+            case 'go':
+                return `package main
+
+import (
+    "fmt"
+    "net/http"
+    ${body ? '"strings"' : ''}
+    "io/ioutil"
+)
+
+func main() {
+    url := "${finalUrl}"
+    ${body ? `payload := strings.NewReader(\`${bodyStr}\`)` : ''}
+    
+    req, _ := http.NewRequest("${method}", url, ${body ? 'payload' : 'nil'})
+    ${Object.entries(defaultHeaders).map(([k,v]) => `req.Header.Add("${k}", "${v}")`).join('\\n    ')}
+    
+    res, _ := http.DefaultClient.Do(req)
+    defer res.Body.Close()
+    
+    body, _ := ioutil.ReadAll(res.Body)
+    fmt.Println(string(body))
+}`;
+
+            case 'ruby':
+                return `require 'net/http'
+require 'json'
+
+uri = URI('${finalUrl}')
+http = Net::HTTP.new(uri.host, uri.port)
+http.use_ssl = true
+
+request = Net::HTTP::${method.charAt(0).toUpperCase() + method.slice(1).toLowerCase()}.new(uri)
+${Object.entries(defaultHeaders).map(([k,v]) => `request['${k}'] = '${v}'`).join('\\n')}
+${body ? `request.body = '${bodyStr}'` : ''}
+
+response = http.request(request)
+puts response.body`;
+
+            case 'swift':
+                return `import Foundation
+
+let url = URL(string: "${finalUrl}")!
+var request = URLRequest(url: url)
+request.httpMethod = "${method}"
+${Object.entries(defaultHeaders).map(([k,v]) => `request.setValue("${v}", forHTTPHeaderField: "${k}")`).join('\\n')}
+${body ? `request.httpBody = """\\n${bodyStr}\\n""".data(using: .utf8)` : ''}
+
+let task = URLSession.shared.dataTask(with: request) { data, response, error in
+    if let data = data {
+        print(String(data: data, encoding: .utf8) ?? "")
+    }
+}
+task.resume();`;
+
+            case 'kotlin':
+                return `import okhttp3.*
+import okhttp3.MediaType.Companion.toMediaType
+
+val client = OkHttpClient()
+${body ? `val mediaType = "application/json".toMediaType()\\nval body = RequestBody.create(mediaType, """${bodyStr}""")` : ''}
+
+val request = Request.Builder()
+    .url("${finalUrl}")
+    .${method.toLowerCase()}(${body ? 'body' : 'null'})
+    ${Object.entries(defaultHeaders).map(([k,v]) => `.addHeader("${k}", "${v}")`).join('\\n    ')}
+    .build()
+
+val response = client.newCall(request).execute()
+println(response.body?.string())`;
+
+            case 'rust':
+                return `use reqwest;
+use serde_json::json;
+
+#[tokio::main]
+async fn main() -> Result<(), Box<dyn std::error::Error>> {
+    let client = reqwest::Client::new();
+    
+    let response = client
+        .${method.toLowerCase()}("${finalUrl}")
+        ${Object.entries(defaultHeaders).map(([k,v]) => `.header("${k}", "${v}")`).join('\\n        ')}
+        ${body ? `.json(&json!(${bodyStr}))` : ''}
+        .send()
+        .await?;
+    
+    let body = response.text().await?;
+    println!("{}", body);
+    Ok(())
+}`;
+
+            case 'nodejs':
+                return `const https = require('https');
+
+const options = {
+    hostname: new URL('${finalUrl}').hostname,
+    path: new URL('${finalUrl}').pathname + new URL('${finalUrl}').search,
+    method: '${method}',
+    headers: {
+        ${Object.entries(defaultHeaders).map(([k,v]) => `'${k}': '${v}'`).join(',\\n        ')}
+    }
+};
+
+const req = https.request(options, (res) => {
+    let data = '';
+    res.on('data', (chunk) => data += chunk);
+    res.on('end', () => console.log(data));
+});
+
+${body ? `req.write('${bodyStr}');` : ''}
+req.end();`;
+
+            default:
+                return `// ${language} example not available`;
+        }
+    }
+
+    // Resolve $ref references in OpenAPI schema
+    function resolveSchemaRef(schema, openApiSpec) {
+        if (!schema || !openApiSpec) return schema;
+        
+        if (schema.$ref) {
+            // Handle $ref like '#/components/schemas/CaptureRequest'
+            const refPath = schema.$ref.replace('#/', '').split('/');
+            let resolved = openApiSpec;
+            
+            for (const pathPart of refPath) {
+                resolved = resolved[pathPart];
+                if (!resolved) {
+                    console.log('Could not resolve $ref:', schema.$ref);
+                    return schema;
+                }
+            }
+            
+            console.log('Resolved $ref', schema.$ref, 'to:', resolved);
+            return resolved;
+        }
+        
+        return schema;
+    }
+    
+    // Generate example value from OpenAPI schema
+    function generateExampleFromSchema(schema, name = 'example', openApiSpec = null) {
+        if (!schema) return '';
+        
+        // Resolve $ref if present
+        schema = resolveSchemaRef(schema, openApiSpec);
+        
+        if (schema.example !== undefined) {
+            return schema.example;
+        }
+        
+        if (schema.default !== undefined) {
+            return schema.default;
+        }
+        
+        switch (schema.type) {
+            case 'string':
+                if (schema.format === 'email') return 'user@example.com';
+                if (schema.format === 'date-time') return new Date().toISOString();
+                if (schema.format === 'date') return new Date().toISOString().split('T')[0];
+                if (schema.format === 'uuid') return '123e4567-e89b-12d3-a456-426614174000';
+                if (schema.enum && schema.enum.length > 0) return schema.enum[0];
+                return name.includes('id') ? 'your-' + name.replace(/([A-Z])/g, '-$1').toLowerCase() : 'example-' + name.replace(/([A-Z])/g, '-$1').toLowerCase();
+                
+            case 'integer':
+            case 'number':
+                return schema.minimum !== undefined ? schema.minimum : 123;
+                
+            case 'boolean':
+                return true;
+                
+            case 'array':
+                const itemExample = schema.items ? generateExampleFromSchema(schema.items, name + 'Item', openApiSpec) : 'example';
+                return [itemExample];
+                
+            case 'object':
+                const obj = {};
+                if (schema.properties) {
+                    Object.entries(schema.properties).forEach(([key, propSchema]) => {
+                        obj[key] = generateExampleFromSchema(propSchema, key, openApiSpec);
+                    });
+                }
+                return obj;
+                
+            default:
+                return 'example-value';
+        }
+    }
+    
+    // Extract operation details from OpenAPI spec
+    function extractOperationDetails(openApiSpec, method, path) {
+        console.log('Extracting operation details for:', method, path);
+        console.log('Available paths in spec:', Object.keys(openApiSpec?.paths || {}));
+        
+        if (!openApiSpec || !openApiSpec.paths || !openApiSpec.paths[path]) {
+            console.log('Path not found in spec:', path);
+            return { parameters: {}, requestBody: null, headers: {} };
+        }
+        
+        const pathItem = openApiSpec.paths[path];
+        const operation = pathItem[method.toLowerCase()];
+        
+        if (!operation) {
+            console.log('Operation not found:', method.toLowerCase(), 'Available methods:', Object.keys(pathItem));
+            return { parameters: {}, requestBody: null, headers: {} };
+        }
+        
+        console.log('Found operation:', operation.operationId || `${method} ${path}`);
+        
+        const result = {
+            parameters: { path: {}, query: {}, header: {} },
+            requestBody: null,
+            headers: {}
+        };
+        
+        // Extract parameters
+        const allParameters = [...(pathItem.parameters || []), ...(operation.parameters || [])];
+        allParameters.forEach(param => {
+            if (param.in === 'path') {
+                result.parameters.path[param.name] = generateExampleFromSchema(param.schema, param.name, openApiSpec);
+            } else if (param.in === 'query') {
+                if (param.required) {
+                    result.parameters.query[param.name] = generateExampleFromSchema(param.schema, param.name, openApiSpec);
+                }
+            } else if (param.in === 'header') {
+                if (param.required && param.name.toLowerCase() !== 'authorization') {
+                    result.headers[param.name] = generateExampleFromSchema(param.schema, param.name, openApiSpec);
+                }
+            }
+        });
+        
+        // Extract request body
+        if (operation.requestBody && operation.requestBody.content) {
+            const contentTypes = Object.keys(operation.requestBody.content);
+            console.log('Available content types:', contentTypes);
+            
+            const jsonContentType = contentTypes.find(ct => ct.includes('json'));
+            const formContentType = contentTypes.find(ct => ct.includes('form-urlencoded'));
+            const preferredContentType = jsonContentType || formContentType || contentTypes[0];
+            
+            console.log('Using content type:', preferredContentType);
+            
+            if (preferredContentType && operation.requestBody.content[preferredContentType].schema) {
+                const bodySchema = operation.requestBody.content[preferredContentType].schema;
+                console.log('Request body schema:', bodySchema);
+                result.requestBody = generateExampleFromSchema(bodySchema, 'requestBody', openApiSpec);
+                result.contentType = preferredContentType;
+                console.log('Generated request body:', result.requestBody);
+            } else {
+                console.log('No schema found for content type:', preferredContentType);
+            }
+        } else {
+            console.log('No request body found in operation');
+        }
+        
+        return result;
+    }
+    
+    // Store the OpenAPI spec globally for code generation
+    let globalOpenApiSpec = null;
+    
+    // Inject custom code snippets into RapiDoc
+    function injectCustomCodeSnippets(shadowRoot, specDetail) {
+        console.log('Injecting custom code snippets into RapiDoc...');
+        
+        // Store the spec for later use
+        if (specDetail && specDetail.spec) {
+            globalOpenApiSpec = specDetail.spec;
+            console.log('Stored OpenAPI spec with', Object.keys(specDetail.spec.paths || {}).length, 'paths');
+        }
+        
+        // Wait a bit more for RapiDoc to fully render
+        setTimeout(() => {
+            // Find all operation sections - look for the expanded endpoint bodies
+            const operations = shadowRoot.querySelectorAll('.expanded-endpoint-body, [part*="section-operation"]');
+            console.log(`Found ${operations.length} operations to inject snippets into`);
+            
+            operations.forEach((operation, index) => {
+                console.log(`Processing operation ${index + 1}:`, operation);
+                
+                // Look for the request-response container
+                const reqRespContainer = operation.querySelector('.expanded-req-resp-container');
+                if (!reqRespContainer) {
+                    console.log('No req-resp container found, skipping operation');
+                    return;
+                }
+                
+                // Check if we already injected snippets
+                if (reqRespContainer.querySelector('.custom-code-snippets')) {
+                    console.log('Snippets already injected, skipping');
+                    return;
+                }
+                
+                // Extract operation details
+                const methodElement = operation.querySelector('[part*="label-operation-method"]');
+                const pathElement = operation.querySelector('[part*="label-operation-path"]');
+                
+                const method = methodElement ? methodElement.textContent.trim().toUpperCase() : 'GET';
+                const path = pathElement ? pathElement.textContent.trim() : '/unknown';
+                
+                console.log(`Injecting snippets for: ${method} ${path}`);
+                
+                // Create our custom code snippet container
+                const customContainer = document.createElement('div');
+                customContainer.className = 'custom-code-snippets';
+                customContainer.innerHTML = createCustomSnippetHTML({ method, path });
+                
+                // Insert at the top of the req-resp container
+                reqRespContainer.insertBefore(customContainer, reqRespContainer.firstChild);
+                
+                // Generate initial code for the first language (cURL) and ensure cURL is active
+                setTimeout(() => {
+                    // Ensure cURL tab and content are active
+                    const curlTab = customContainer.querySelector('.snippet-tab[data-lang="curl"]');
+                    const curlContent = customContainer.querySelector('.snippet-content[data-lang="curl"]');
+                    
+                    if (curlTab && curlContent) {
+                        // Clear all active states first
+                        customContainer.querySelectorAll('.snippet-tab').forEach(t => t.classList.remove('active'));
+                        customContainer.querySelectorAll('.snippet-content').forEach(c => c.classList.remove('active'));
+                        
+                        // Set cURL as active
+                        curlTab.classList.add('active');
+                        curlContent.classList.add('active');
+                        
+                        // Generate initial cURL code
+                        generateCodeForOperation(curlContent, 'curl');
+                        console.log('Set cURL as active and generated initial code');
+                    }
+                }, 200);
+                
+                
+                console.log('Custom snippets injected successfully');
+            });
+            
+            // Add event listeners for language switching
+            addSnippetEventListeners(shadowRoot);
+            
+            // Also try to inject into api-request elements
+            injectIntoApiRequestElements(shadowRoot);
+            
+            // Inject CSS styles into shadow DOM
+            injectCustomStyles(shadowRoot);
+            
+        }, 1500); // Give more time for RapiDoc to render
+    }
+    
+    // Function to inject CSS styles into shadow DOM
+    function injectCustomStyles(shadowRoot) {
+        const style = document.createElement('style');
+        style.textContent = `
+            .custom-code-snippets {
+                margin: 16px 0;
+                border: 1px solid #e2e8f0;
+                border-radius: 8px;
+                background: #ffffff;
+                box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+            }
+            
+            .custom-snippet-header {
+                padding: 16px;
+                border-bottom: 1px solid #e2e8f0;
+                background: #f8fafc;
+                border-radius: 8px 8px 0 0;
+            }
+            
+            .custom-snippet-header h4 {
+                margin: 0 0 12px 0;
+                font-size: 16px;
+                font-weight: 600;
+                color: #1e293b;
+            }
+            
+            .snippet-tabs {
+                display: flex;
+                flex-wrap: wrap;
+                gap: 4px;
+            }
+            
+            .snippet-tab {
+                display: flex;
+                align-items: center;
+                gap: 6px;
+                padding: 6px 12px;
+                border: 1px solid #e2e8f0;
+                border-radius: 6px;
+                background: #ffffff;
+                color: #64748b;
+                font-size: 13px;
+                font-weight: 500;
+                cursor: pointer;
+                transition: all 0.15s ease;
+            }
+            
+            .snippet-tab:hover {
+                border-color: #3b82f6;
+                color: #1e293b;
+                box-shadow: 0 2px 4px rgba(59, 130, 246, 0.1);
+            }
+            
+            .snippet-tab.active {
+                background: #3b82f6;
+                border-color: #3b82f6;
+                color: #ffffff;
+                box-shadow: 0 2px 8px rgba(59, 130, 246, 0.25);
+            }
+            
+            .lang-icon {
+                font-size: 14px;
+            }
+            
+            .snippet-body {
+                position: relative;
+            }
+            
+            .snippet-content {
+                display: none;
+                position: relative;
+            }
+            
+            .snippet-content.active {
+                display: block;
+            }
+            
+            .snippet-content pre {
+                margin: 0;
+                background: #f8fafc;
+                border-radius: 0 0 8px 8px;
+                overflow-x: auto;
+                position: relative;
+            }
+            
+            .snippet-content code {
+                display: block;
+                padding: 20px;
+                font-family: 'SFMono-Regular', Consolas, 'Liberation Mono', Menlo, monospace;
+                font-size: 13px;
+                line-height: 1.5;
+                color: #1e293b;
+                white-space: pre;
+                overflow-x: auto;
+            }
+            
+            .copy-btn {
+                position: absolute;
+                top: 8px;
+                right: 8px;
+                padding: 6px 8px;
+                background: rgba(255, 255, 255, 0.9);
+                border: 1px solid #e2e8f0;
+                border-radius: 4px;
+                font-size: 12px;
+                cursor: pointer;
+                transition: all 0.15s ease;
+                backdrop-filter: blur(4px);
+            }
+            
+            .copy-btn:hover {
+                background: #ffffff;
+                box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+            }
+        `;
+        shadowRoot.appendChild(style);
+    }
+    
+    // Additional function to inject into api-request elements
+    function injectIntoApiRequestElements(shadowRoot) {
+        const apiRequestElements = shadowRoot.querySelectorAll('api-request');
+        console.log(`Found ${apiRequestElements.length} api-request elements`);
+        
+        apiRequestElements.forEach((apiRequest, index) => {
+            // api-request has its own shadow DOM
+            if (apiRequest.shadowRoot) {
+                console.log(`Injecting into api-request ${index + 1} shadow DOM`);
+                
+                setTimeout(() => {
+                    const requestShadow = apiRequest.shadowRoot;
+                    const curlContainer = requestShadow.querySelector('.curl-container, .code-samples, [class*="curl"]');
+                    
+                    if (curlContainer && !requestShadow.querySelector('.custom-code-snippets')) {
+                        const method = apiRequest.getAttribute('method') || 'GET';
+                        const path = apiRequest.getAttribute('path') || '/unknown';
+                        
+                        const customContainer = document.createElement('div');
+                        customContainer.className = 'custom-code-snippets';
+                        customContainer.innerHTML = createCustomSnippetHTML({ method: method.toUpperCase(), path });
+                        
+                        curlContainer.parentNode.insertBefore(customContainer, curlContainer);
+                        curlContainer.style.display = 'none';
+                        
+                        addSnippetEventListeners(requestShadow);
+                        console.log(`Injected snippets into api-request: ${method} ${path}`);
+                    }
+                }, 500);
+            }
+        });
+    }
+
+    // Create HTML for custom code snippets
+    function createCustomSnippetHTML(operationData = {}) {
+        const languages = [
+            { id: 'curl', name: 'cURL', icon: '🌐' },
+            { id: 'javascript', name: 'JavaScript', icon: '🟨' },
+            { id: 'python', name: 'Python', icon: '🐍' },
+            { id: 'java', name: 'Java', icon: '☕' },
+            { id: 'csharp', name: 'C#', icon: '🔷' },
+            { id: 'php', name: 'PHP', icon: '🐘' },
+            { id: 'go', name: 'Go', icon: '🐹' },
+            { id: 'ruby', name: 'Ruby', icon: '💎' },
+            { id: 'swift', name: 'Swift', icon: '🦉' },
+            { id: 'kotlin', name: 'Kotlin', icon: '🤖' },
+            { id: 'rust', name: 'Rust', icon: '🦀' },
+            { id: 'nodejs', name: 'Node.js', icon: '🟢' }
+        ];
+        
+        const tabsHTML = languages.map((lang, index) => 
+            `<button class="snippet-tab ${index === 0 ? 'active' : ''}" data-lang="${lang.id}">
+                <span class="lang-icon">${lang.icon}</span>
+                <span class="lang-name">${lang.name}</span>
+            </button>`
+        ).join('');
+        
+        const contentHTML = languages.map((lang, index) => 
+            `<div class="snippet-content ${index === 0 ? 'active' : ''}" data-lang="${lang.id}" data-content-lang="${lang.id}">
+                <pre><code class="language-${lang.id}">Loading ${lang.name} example...</code></pre>
+                <button class="copy-btn" title="Copy to clipboard">📋</button>
+            </div>`
+        ).join('');
+        
+        return `
+            <div class="custom-snippet-header">
+                <h4>Code Examples</h4>
+                <div class="snippet-tabs">${tabsHTML}</div>
+            </div>
+            <div class="snippet-body">${contentHTML}</div>
+        `;
+    }
+
+    // Add event listeners for code snippet interactions
+    function addSnippetEventListeners(shadowRoot) {
+        // Language tab switching
+        shadowRoot.addEventListener('click', (e) => {
+            if (e.target.closest('.snippet-tab')) {
+                const tab = e.target.closest('.snippet-tab');
+                const container = tab.closest('.custom-code-snippets');
+                const lang = tab.dataset.lang;
+                
+                console.log('Tab clicked:', lang);
+                
+                // Update active tab
+                container.querySelectorAll('.snippet-tab').forEach(t => t.classList.remove('active'));
+                tab.classList.add('active');
+                
+                // Update active content
+                container.querySelectorAll('.snippet-content').forEach(c => c.classList.remove('active'));
+                const content = container.querySelector(`.snippet-content[data-lang="${lang}"]`);
+                if (content) {
+                    content.classList.add('active');
+                    
+                    // Generate code for this language
+                    console.log('Generating code for language:', lang);
+                    generateCodeForOperation(content, lang);
+                } else {
+                    console.log('Content element not found for language:', lang);
+                }
+            }
+            
+            // Copy button
+            if (e.target.closest('.copy-btn')) {
+                const copyBtn = e.target.closest('.copy-btn');
+                const code = copyBtn.previousElementSibling.textContent;
+                navigator.clipboard.writeText(code).then(() => {
+                    copyBtn.textContent = '✅';
+                    setTimeout(() => copyBtn.textContent = '📋', 2000);
+                });
+            }
+        });
+    }
+
+    // Generate code for specific operation using OpenAPI spec data
+    function generateCodeForOperation(contentElement, language) {
+        // Get operation details from the container
+        const container = contentElement.closest('.custom-code-snippets');
+        const operationContainer = container.closest('.expanded-endpoint-body');
+        
+        let method = 'GET';
+        let path = '/endpoint';
+        
+        if (operationContainer) {
+            // Extract method and path from RapiDoc structure
+            const methodElement = operationContainer.querySelector('[part*="label-operation-method"]');
+            const pathElement = operationContainer.querySelector('[part*="label-operation-path"]');
+            
+            method = methodElement ? methodElement.textContent.trim().toUpperCase() : 'GET';
+            path = pathElement ? pathElement.textContent.trim() : '/endpoint';
+        }
+        
+        // Use the default server URL from RapiDoc
+        const rapidocElement = document.getElementById('rapidoc-element');
+        const serverUrl = rapidocElement ? rapidocElement.getAttribute('default-api-server') || 'https://api-dev02.noqodi.com' : 'https://api-dev02.noqodi.com';
+        
+        const fullUrl = `${serverUrl}${path}`;
+        
+        console.log(`Generating ${language} code for: ${method} ${fullUrl}`);
+        
+        // Get the OpenAPI spec from stored global spec or RapiDoc
+        let openApiSpec = globalOpenApiSpec;
+        let operationDetails = { parameters: {}, requestBody: null, headers: {} };
+        
+        if (!openApiSpec && rapidocElement && rapidocElement.resolvedSpec) {
+            openApiSpec = rapidocElement.resolvedSpec;
+        }
+        
+        if (openApiSpec) {
+            operationDetails = extractOperationDetails(openApiSpec, method, path);
+            console.log('Using dynamic operation details for', method, path, ':', operationDetails);
+        } else {
+            console.log('OpenAPI spec not available, using default values for', method, path);
+        }
+        
+        const code = generateCodeSnippet(
+            language, 
+            method, 
+            fullUrl, 
+            operationDetails.headers,
+            operationDetails.requestBody,
+            operationDetails.parameters,
+            operationDetails.contentType || 'application/json'
+        );
+        
+        const codeElement = contentElement.querySelector('code');
+        if (codeElement) {
+            codeElement.textContent = code;
+        }
+    }
+
+    // Wait for RapiDoc to be defined
+    function initRapiDoc() {
+        const rapidocElement = document.getElementById('rapidoc-element');
+        if (!rapidocElement) {
+            console.error('RapiDoc element not found');
+            return;
+        }
+
+        // Listen for spec loaded event
+        rapidocElement.addEventListener('spec-loaded', (e) => {
+            console.log('Spec loaded successfully:', e.detail);
+            
+            // Check if navigation is populated and inject custom code snippets
+            setTimeout(() => {
+                const shadowRoot = rapidocElement.shadowRoot;
+                if (shadowRoot) {
+                    const navBar = shadowRoot.querySelector('.nav-bar');
+                    const mainContent = shadowRoot.querySelector('.main-content');
+                    
+                    if (navBar && navBar.children.length === 0) {
+                        console.error('Navigation bar is empty - spec might not have loaded correctly');
+                    } else {
+                        console.log('Navigation bar populated successfully');
+                    }
+                    
+                    if (!mainContent || mainContent.textContent.trim() === '') {
+                        console.error('Main content is empty - documentation might not be rendering');
+                    }
+                    
+                    // Inject custom multi-language code snippets
+                    injectCustomCodeSnippets(shadowRoot, e.detail);
+                }
+            }, 1000);
+        });
+
+        // Listen for spec load error
+        rapidocElement.addEventListener('spec-load-error', (e) => {
+            console.error('Failed to load spec:', e.detail);
+            
+            // Show error in the container
+            const container = document.getElementById('rapidoc-container');
+            if (container) {
+                container.innerHTML = `
+                    <div class="error-message">
+                        <h2>Failed to Load API Documentation</h2>
+                        <p>Error: ${e.detail.message || e.detail}</p>
+                        <p>Spec URL: ${rapidocElement.getAttribute('spec-url')}</p>
+                        <button onclick="location.reload()" class="retry-button">Retry</button>
+                    </div>
+                `;
+            }
+        });
+
+        // Add event listener for before-try to ensure code snippets work
+        rapidocElement.addEventListener('before-try', (e) => {
+            console.log('API try initiated:', e.detail);
+        });
+
+        rapidocElement.addEventListener('after-try', (e) => {
+            console.log('API response received:', e.detail);
+        });
+    }
+
+    // Initialize when DOM is ready
+    if (document.readyState === 'loading') {
+        document.addEventListener('DOMContentLoaded', initRapiDoc);
+    } else {
+        // Give RapiDoc element time to initialize
+        setTimeout(initRapiDoc, 100);
+    }
+</script>
+
+<style>
+    .rapidoc-wrapper {
+        width: 100%;
+        height: 100%;
+        background: #ffffff;
+        overflow: hidden;
+        position: relative;
+        display: flex;
+        flex-direction: column;
+    }
+    
+    /* Ensure RapiDoc takes full height */
+    .rapidoc-wrapper rapi-doc {
+        flex: 1;
+        display: block !important;
+    }
+    
+    /* Error message styling */
+    .error-message {
+        padding: 2rem;
+        text-align: center;
+        color: #64748b;
+        height: 100%;
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+        background: #ffffff;
+    }
+    
+    .error-message h2 {
+        color: #ef4444;
+        margin-bottom: 1rem;
+        font-size: 1.5rem;
+        font-weight: 600;
+    }
+    
+    .error-message p {
+        margin-bottom: 0.5rem;
+        color: #64748b;
+        line-height: 1.6;
+    }
+    
+    .retry-button {
+        background: #3b82f6;
+        color: white;
+        border: none;
+        padding: 0.75rem 1.5rem;
+        border-radius: 0.375rem;
+        cursor: pointer;
+        font-weight: 500;
+        margin-top: 1rem;
+        transition: background 0.2s ease;
+        font-size: 0.875rem;
+    }
+    
+    .retry-button:hover {
+        background: #1d4ed8;
+    }
+    
+    /* Override RapiDoc internal styles for better integration */
+    .rapidoc-wrapper rapi-doc::part(section-navbar) {
+        background: #fafbfc !important;
+        border-right: 1px solid #e2e8f0 !important;
+        width: 320px !important;
+        min-width: 280px !important;
+        max-width: 400px !important;
+        overflow-y: auto !important;
+        flex-shrink: 0 !important;
+    }
+    
+    .rapidoc-wrapper rapi-doc::part(section-main-content) {
+        background: #ffffff !important;
+        padding: 2rem !important;
+        overflow-y: auto !important;
+        flex: 1 !important;
+    }
+    
+    /* Navigation styling */
+    .rapidoc-wrapper rapi-doc::part(nav-bar-info) {
+        padding: 1rem !important;
+        border-bottom: 1px solid #e2e8f0 !important;
+        background: #f8fafc !important;
+    }
+    
+    .rapidoc-wrapper rapi-doc::part(nav-bar-search) {
+        padding: 0.75rem 1rem !important;
+        border-bottom: 1px solid #e2e8f0 !important;
+        background: #ffffff !important;
+    }
+    
+    .rapidoc-wrapper rapi-doc::part(btn-fill) {
+        background: #3b82f6 !important;
+        color: #ffffff !important;
+        border: none !important;
+        border-radius: 0.375rem !important;
+        font-weight: 500 !important;
+        transition: background 0.2s ease !important;
+    }
+    
+    .rapidoc-wrapper rapi-doc::part(btn-fill):hover {
+        background: #1d4ed8 !important;
+    }
+    
+    .rapidoc-wrapper rapi-doc::part(nav-bar-tag) {
+        font-weight: 600 !important;
+        color: #1e293b !important;
+        font-size: 0.875rem !important;
+        margin-top: 1rem !important;
+    }
+    
+    .rapidoc-wrapper rapi-doc::part(nav-bar-path) {
+        font-size: 0.875rem !important;
+    }
+    
+    /* Code snippet styling */
+    .rapidoc-wrapper rapi-doc::part(code-sample-tab) {
+        background: #f1f5f9 !important;
+        border: 1px solid #e2e8f0 !important;
+        border-radius: 0.375rem 0.375rem 0 0 !important;
+        padding: 0.5rem 1rem !important;
+        font-size: 0.75rem !important;
+        font-weight: 500 !important;
+        color: #64748b !important;
+    }
+    
+    .rapidoc-wrapper rapi-doc::part(code-sample-tab-active) {
+        background: #3b82f6 !important;
+        color: #ffffff !important;
+        border-color: #3b82f6 !important;
+    }
+    
+    .rapidoc-wrapper rapi-doc::part(code-sample) {
+        background: #f8fafc !important;
+        border: 1px solid #e2e8f0 !important;
+        border-radius: 0 0.375rem 0.375rem 0.375rem !important;
+        font-family: 'SFMono-Regular', Consolas, 'Liberation Mono', Menlo, monospace !important;
+        font-size: 13px !important;
+        line-height: 1.5 !important;
+        padding: 1rem !important;
+        overflow-x: auto !important;
+    }
+    
+    .rapidoc-wrapper rapi-doc::part(try-btn) {
+        background: #10b981 !important;
+        color: #ffffff !important;
+        border: none !important;
+        border-radius: 0.375rem !important;
+        padding: 0.75rem 1.5rem !important;
+        font-weight: 600 !important;
+        font-size: 0.875rem !important;
+        cursor: pointer !important;
+        transition: background 0.2s ease !important;
+    }
+    
+    .rapidoc-wrapper rapi-doc::part(try-btn):hover {
+        background: #059669 !important;
+    }
+    
+    /* RTL Support */
+    .rapidoc-wrapper.rtl {
+        direction: rtl;
+    }
+    
+    .rapidoc-wrapper.rtl rapi-doc::part(section-navbar) {
+        border-right: none !important;
+        border-left: 1px solid #e2e8f0 !important;
+        order: 2 !important;
+    }
+    
+    .rapidoc-wrapper.rtl rapi-doc::part(section-main-content) {
+        order: 1 !important;
+        padding-right: 2rem !important;
+        padding-left: 2rem !important;
+    }
+    
+    .rapidoc-wrapper.rtl rapi-doc {
+        direction: rtl !important;
+    }
+    
+    /* RTL Navigation styling */
+    .rapidoc-wrapper.rtl rapi-doc::part(nav-bar-info) {
+        text-align: right !important;
+    }
+    
+    .rapidoc-wrapper.rtl rapi-doc::part(nav-bar-path) {
+        text-align: right !important;
+        padding-right: 1rem !important;
+        padding-left: 0.5rem !important;
+    }
+    
+    .rapidoc-wrapper.rtl rapi-doc::part(nav-bar-tag) {
+        text-align: right !important;
+    }
+    
+    /* RTL Code samples */
+    .rapidoc-wrapper.rtl rapi-doc::part(code-sample) {
+        direction: ltr !important;
+        text-align: left !important;
+    }
+    
+    .rapidoc-wrapper.rtl rapi-doc::part(code-sample-tab) {
+        border-radius: 0.375rem 0.375rem 0 0 !important;
+    }
+    
+    /* RTL Try button positioning */
+    .rapidoc-wrapper.rtl rapi-doc::part(try-btn) {
+        margin-left: 0 !important;
+        margin-right: 1rem !important;
+    }
+    
+    /* RTL form inputs */
+    .rapidoc-wrapper.rtl input,
+    .rapidoc-wrapper.rtl textarea,
+    .rapidoc-wrapper.rtl select {
+        text-align: right !important;
+        direction: rtl !important;
+    }
+    
+    /* Keep URLs and code LTR even in RTL mode */
+    .rapidoc-wrapper.rtl rapi-doc::part(endpoint-path),
+    .rapidoc-wrapper.rtl rapi-doc::part(param-name),
+    .rapidoc-wrapper.rtl rapi-doc::part(param-type),
+    .rapidoc-wrapper.rtl code,
+    .rapidoc-wrapper.rtl pre {
+        direction: ltr !important;
+        text-align: left !important;
+    }
+
+    /* Custom Code Snippets Styling */
+    .custom-code-snippets {
+        margin: 16px 0;
+        border: 1px solid #e2e8f0;
+        border-radius: 8px;
+        background: #ffffff;
+        box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+    }
+    
+    .custom-snippet-header {
+        padding: 16px;
+        border-bottom: 1px solid #e2e8f0;
+        background: #f8fafc;
+        border-radius: 8px 8px 0 0;
+    }
+    
+    .custom-snippet-header h4 {
+        margin: 0 0 12px 0;
+        font-size: 16px;
+        font-weight: 600;
+        color: #1e293b;
+    }
+    
+    .snippet-tabs {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 4px;
+    }
+    
+    .snippet-tab {
+        display: flex;
+        align-items: center;
+        gap: 6px;
+        padding: 6px 12px;
+        border: 1px solid #e2e8f0;
+        border-radius: 6px;
+        background: #ffffff;
+        color: #64748b;
+        font-size: 13px;
+        font-weight: 500;
+        cursor: pointer;
+        transition: all 0.15s ease;
+    }
+    
+    .snippet-tab:hover {
+        border-color: #3b82f6;
+        color: #1e293b;
+        box-shadow: 0 2px 4px rgba(59, 130, 246, 0.1);
+    }
+    
+    .snippet-tab.active {
+        background: #3b82f6;
+        border-color: #3b82f6;
+        color: #ffffff;
+        box-shadow: 0 2px 8px rgba(59, 130, 246, 0.25);
+    }
+    
+    .lang-icon {
+        font-size: 14px;
+    }
+    
+    .snippet-body {
+        position: relative;
+    }
+    
+    .snippet-content {
+        display: none;
+        position: relative;
+    }
+    
+    .snippet-content.active {
+        display: block;
+    }
+    
+    .snippet-content pre {
+        margin: 0;
+        background: #f8fafc;
+        border-radius: 0 0 8px 8px;
+        overflow-x: auto;
+        position: relative;
+    }
+    
+    .snippet-content code {
+        display: block;
+        padding: 20px;
+        font-family: 'SFMono-Regular', Consolas, 'Liberation Mono', Menlo, monospace;
+        font-size: 13px;
+        line-height: 1.5;
+        color: #1e293b;
+        white-space: pre;
+        overflow-x: auto;
+    }
+    
+    .copy-btn {
+        position: absolute;
+        top: 8px;
+        right: 8px;
+        padding: 6px 8px;
+        background: rgba(255, 255, 255, 0.9);
+        border: 1px solid #e2e8f0;
+        border-radius: 4px;
+        font-size: 12px;
+        cursor: pointer;
+        transition: all 0.15s ease;
+        backdrop-filter: blur(4px);
+    }
+    
+    .copy-btn:hover {
+        background: #ffffff;
+        box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+    }
+    
+    /* RTL Support for Custom Snippets */
+    [dir="rtl"] .snippet-tabs {
+        justify-content: flex-end;
+    }
+    
+    [dir="rtl"] .snippet-tab {
+        flex-direction: row-reverse;
+    }
+    
+    [dir="rtl"] .copy-btn {
+        left: 8px;
+        right: auto;
+    }
+    
+    [dir="rtl"] .snippet-content code {
+        text-align: left;
+        direction: ltr;
+    }
+
+    /* Responsive design */
+    @media (max-width: 768px) {
+        .rapidoc-wrapper rapi-doc::part(section-navbar) {
+            width: 100% !important;
+            position: relative !important;
+            height: auto !important;
+            max-height: 40vh !important;
+            border-right: none !important;
+            border-bottom: 1px solid #e2e8f0 !important;
+        }
+        
+        .rapidoc-wrapper.rtl rapi-doc::part(section-navbar) {
+            border-left: none !important;
+            border-bottom: 1px solid #e2e8f0 !important;
+            order: 1 !important;
+        }
+        
+        .rapidoc-wrapper.rtl rapi-doc::part(section-main-content) {
+            order: 2 !important;
+        }
+        
+        .rapidoc-wrapper rapi-doc {
+            flex-direction: column !important;
+        }
+    }
+</style>

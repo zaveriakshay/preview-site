@@ -1,0 +1,242 @@
+---
+export interface Props {
+    language: string;
+    version: string;
+}
+
+const { language, version } = Astro.props;
+---
+
+<div class="document-export-dropdown">
+    <button class="export-trigger" type="button" aria-haspopup="true" aria-expanded="false">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
+            <polyline points="7,10 12,15 17,10"></polyline>
+            <line x1="12" y1="15" x2="12" y2="3"></line>
+        </svg>
+        <span class="export-label" data-en="Export" data-ar="تصدير">Export</span>
+        <svg class="dropdown-arrow" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <polyline points="6,9 12,15 18,9"></polyline>
+        </svg>
+    </button>
+    <div class="export-menu">
+        <button class="export-option" data-format="pdf" data-lang={language} data-version={version}>
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path>
+                <polyline points="14,2 14,8 20,8"></polyline>
+            </svg>
+            <span data-en="Download as PDF" data-ar="تحميل كـ PDF">Download as PDF</span>
+        </button>
+        <button class="export-option" data-format="docx" data-lang={language} data-version={version}>
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path>
+                <polyline points="14,2 14,8 20,8"></polyline>
+                <line x1="16" y1="13" x2="8" y2="13"></line>
+                <line x1="16" y1="17" x2="8" y2="17"></line>
+                <line x1="10" y1="9" x2="8" y2="9"></line>
+            </svg>
+            <span data-en="Download as Word" data-ar="تحميل كـ Word">Download as Word</span>
+        </button>
+    </div>
+</div>
+
+<style>
+    .document-export-dropdown {
+        position: relative;
+    }
+
+    .export-trigger {
+        display: flex;
+        align-items: center;
+        gap: 6px;
+        padding: 8px 12px;
+        background: rgba(255, 255, 255, 0.9);
+        border: 1px solid rgba(255, 255, 255, 0.3);
+        border-radius: 6px;
+        color: #68768a;
+        font-size: 14px;
+        font-weight: 500;
+        cursor: pointer;
+        transition: all 0.15s ease;
+    }
+
+    .export-trigger:hover {
+        border-color: rgba(255, 255, 255, 0.5);
+        color: #0c0c0d;
+        background: rgba(255, 255, 255, 0.95);
+        box-shadow: 0 2px 4px rgba(0, 0, 0, 0.15);
+    }
+
+    .dropdown-arrow {
+        transition: transform 0.15s ease;
+    }
+
+    .document-export-dropdown[aria-expanded="true"] .dropdown-arrow {
+        transform: rotate(180deg);
+    }
+
+    .export-menu {
+        position: absolute;
+        top: calc(100% + 4px);
+        right: 0;
+        min-width: 200px;
+        background: #ffffff;
+        border: 1px solid #e6e6e7;
+        border-radius: 8px;
+        box-shadow: 0 8px 24px rgba(0, 0, 0, 0.12);
+        z-index: 10001;
+        display: none;
+        padding: 8px 0;
+    }
+
+    .document-export-dropdown[aria-expanded="true"] .export-menu {
+        display: block;
+    }
+
+    .export-option {
+        display: flex;
+        align-items: center;
+        gap: 12px;
+        width: 100%;
+        padding: 10px 16px;
+        border: none;
+        background: none;
+        color: #0c0c0d;
+        font-size: 14px;
+        font-weight: 400;
+        cursor: pointer;
+        transition: background 0.15s ease;
+        text-align: left;
+    }
+
+    .export-option:hover {
+        background: #f4f4f5;
+    }
+
+    [dir="rtl"] .export-menu {
+        left: 0;
+        right: auto;
+    }
+
+    [dir="rtl"] .export-option {
+        text-align: right;
+        flex-direction: row-reverse;
+    }
+
+    .export-loading {
+        position: fixed;
+        top: 50%;
+        left: 50%;
+        transform: translate(-50%, -50%);
+        background: rgba(0, 0, 0, 0.8);
+        color: white;
+        padding: 20px 30px;
+        border-radius: 8px;
+        font-size: 16px;
+        z-index: 10002;
+        display: none;
+    }
+
+    .export-loading.active {
+        display: block;
+    }
+</style>
+
+<div class="export-loading" id="export-loading">
+    <span data-en="Generating document..." data-ar="جاري إنشاء المستند...">Generating document...</span>
+</div>
+
+<script>
+    document.addEventListener('DOMContentLoaded', () => {
+        const exportDropdown = document.querySelector('.document-export-dropdown');
+        const exportTrigger = exportDropdown?.querySelector('.export-trigger');
+        const exportOptions = exportDropdown?.querySelectorAll('.export-option');
+        const loadingIndicator = document.getElementById('export-loading');
+        
+        if (exportTrigger) {
+            exportTrigger.addEventListener('click', (e) => {
+                e.stopPropagation();
+                const isOpen = exportDropdown.getAttribute('aria-expanded') === 'true';
+                exportDropdown.setAttribute('aria-expanded', isOpen ? 'false' : 'true');
+            });
+        }
+        
+        document.addEventListener('click', () => {
+            if (exportDropdown) {
+                exportDropdown.setAttribute('aria-expanded', 'false');
+            }
+        });
+        
+        exportOptions?.forEach(option => {
+            option.addEventListener('click', async (e) => {
+                e.preventDefault();
+                const format = option.dataset.format;
+                const lang = option.dataset.lang;
+                const version = option.dataset.version;
+                
+                exportDropdown.setAttribute('aria-expanded', 'false');
+                
+                if (loadingIndicator) {
+                    loadingIndicator.classList.add('active');
+                }
+                
+                try {
+                    const currentPath = window.location.pathname;
+                    const isApi = currentPath.includes('/api/');
+                    const platform = currentPath.includes('/mobile/') ? 'mobile' : 'web';
+                    
+                    const response = await fetch('/api/export', {
+                        method: 'POST',
+                        headers: {
+                            'Content-Type': 'application/json',
+                        },
+                        body: JSON.stringify({
+                            format,
+                            lang,
+                            version,
+                            path: currentPath,
+                            url: window.location.href,
+                            type: isApi ? 'api' : 'guide',
+                            platform: platform
+                        })
+                    });
+                    
+                    if (!response.ok) {
+                        throw new Error('Export failed');
+                    }
+                    
+                    const blob = await response.blob();
+                    const url = window.URL.createObjectURL(blob);
+                    const a = document.createElement('a');
+                    a.href = url;
+                    
+                    const timestamp = new Date().toISOString().split('T')[0];
+                    const filename = `noqodi-docs-${version}-${lang}-${timestamp}.${format}`;
+                    a.download = filename;
+                    
+                    document.body.appendChild(a);
+                    a.click();
+                    document.body.removeChild(a);
+                    
+                    window.URL.revokeObjectURL(url);
+                } catch (error) {
+                    console.error('Export error:', error);
+                    alert('Failed to export document. Please try again.');
+                } finally {
+                    if (loadingIndicator) {
+                        loadingIndicator.classList.remove('active');
+                    }
+                }
+            });
+        });
+        
+        const currentLang = window.location.pathname.split('/')[1] || 'en';
+        document.querySelectorAll('[data-en][data-ar]').forEach(element => {
+            if (currentLang === 'ar') {
+                element.textContent = element.dataset.ar;
+            } else {
+                element.textContent = element.dataset.en;
+            }
+        });
+    });
+</script>

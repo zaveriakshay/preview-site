@@ -1,0 +1,86 @@
+---
+// PageFrame component that wraps Starlight pages with fixed header/footer layout
+// This ensures our header and footer are always visible with scrolling content
+import Header from './Header.astro';
+import Footer from './Footer.astro';
+import Sidebar from './Sidebar.astro';
+import '../styles/homepage.css';
+
+// Pass through all props to the default slot
+const props = Astro.props;
+
+// Check if this is a page that should show sidebar
+const currentPath = Astro.url.pathname;
+const shouldShowSidebar = currentPath.includes('/guides/');
+---
+
+<!-- Fixed header at top -->
+<Header />
+
+<!-- Main layout container with fixed height -->
+<div class="app-layout">
+    {shouldShowSidebar && (
+        <!-- Scrollable sidebar -->
+        <aside class="app-sidebar" aria-label="Main navigation">
+            <Sidebar />
+        </aside>
+    )}
+    
+    <!-- Scrollable content area where Starlight renders its content -->
+    <main class="app-content">
+        <slot />
+    </main>
+</div>
+
+<!-- Fixed footer at bottom -->
+<Footer />
+
+<style>
+    /* Main layout container - fills remaining height between header and footer */
+    .app-layout {
+        flex: 1;
+        display: grid;
+        grid-template-columns: var(--sl-sidebar-width, 18rem) 1fr;
+        overflow: hidden;
+        min-height: 0;
+        height: 100%;
+    }
+
+    /* Scrollable sidebar */
+    .app-sidebar {
+        overflow-y: auto;
+        overflow-x: hidden;
+        height: 100%;
+        background: var(--sl-color-bg-sidebar);
+        border-right: 1px solid var(--sl-color-hairline);
+    }
+
+    /* Scrollable content area */
+    .app-content {
+        overflow-y: auto;
+        overflow-x: hidden;
+        height: 100%;
+        min-width: 0;
+        position: relative;
+    }
+
+    /* Hide sidebar on mobile by default */
+    @media (max-width: 50rem) {
+        .app-layout {
+            grid-template-columns: 1fr;
+        }
+
+        .app-sidebar {
+            display: none;
+        }
+    }
+
+    /* Ensure proper spacing when no sidebar */
+    .app-layout:not(:has(.app-sidebar)) {
+        grid-template-columns: 1fr;
+    }
+
+    .app-layout:not(:has(.app-sidebar)) .app-content {
+        max-width: 100%;
+    }
+</style>

@@ -1,0 +1,647 @@
+---
+// src/components/ScalarApi.astro
+// Enhanced Scalar API documentation component
+export interface Props {
+    specUrl: string;
+    theme?: 'default' | 'alternate' | 'moon' | 'purple' | 'solarized';
+    layout?: 'modern' | 'classic';
+    hideDownloadButton?: boolean;
+    hideTestRequestButton?: boolean;
+    showSidebar?: boolean;
+}
+
+const { 
+    specUrl, 
+    theme = 'default',
+    layout = 'modern',
+    hideDownloadButton = false,
+    hideTestRequestButton = false,
+    showSidebar = true
+} = Astro.props;
+---
+
+<div id="scalar-api-reference" class="scalar-container">
+    <div class="loading-placeholder">
+        <div class="loading-spinner"></div>
+        <p>Loading API documentation...</p>
+    </div>
+</div>
+
+<script define:vars={{ specUrl, theme, layout, hideDownloadButton, hideTestRequestButton, showSidebar }}>
+    let retryCount = 0;
+    const maxRetries = 50; // Try for up to 10 seconds
+    
+    // Dynamically load Scalar CDN script
+    function loadScalarScript() {
+        return new Promise((resolve, reject) => {
+            // Check if already loaded
+            if (typeof Scalar !== 'undefined') {
+                resolve();
+                return;
+            }
+            
+            // Check if script already exists
+            const existingScript = document.querySelector('script[src*="@scalar/api-reference"]');
+            if (existingScript) {
+                existingScript.onload = resolve;
+                existingScript.onerror = reject;
+                return;
+            }
+            
+            // Create and load the script
+            const script = document.createElement('script');
+            script.src = 'https://cdn.jsdelivr.net/npm/@scalar/api-reference';
+            script.onload = resolve;
+            script.onerror = reject;
+            document.head.appendChild(script);
+        });
+    }
+    
+    // Wait for Scalar to be available and initialize  
+    function initializeScalar() {
+        console.log(`Attempting to initialize Scalar... (attempt ${retryCount + 1}/${maxRetries})`);
+        console.log('Scalar available:', typeof Scalar !== 'undefined');
+        console.log('createApiReference available:', typeof Scalar !== 'undefined' && typeof Scalar.createApiReference === 'function');
+        console.log('Spec URL:', specUrl);
+        
+        if (typeof Scalar !== 'undefined' && typeof Scalar.createApiReference === 'function') {
+            try {
+                const container = document.getElementById('scalar-api-reference');
+                if (!container) {
+                    console.error('Container element not found');
+                    return;
+                }
+                
+                console.log('Container found, clearing loading placeholder...');
+                container.innerHTML = '';
+                
+                console.log('Creating Scalar API reference with config:', {
+                    specUrl, theme, layout, hideDownloadButton, hideTestRequestButton, showSidebar
+                });
+                
+                Scalar.createApiReference(container, {
+                    spec: {
+                        url: specUrl,
+                    },
+                    theme: theme,
+                    layout: 'modern',
+                    hideDownloadButton: hideDownloadButton,
+                    hideTestRequestButton: false,
+                    showSidebar: true,
+                    defaultHttpClient: {
+                        targetKey: 'javascript',
+                        clientKey: 'fetch',
+                    },
+                    darkMode: false,
+                    defaultOpenAllTags: false,
+                    servers: [],
+                    authentication: {
+                        preferredSecurityScheme: '',
+                        http: {
+                            basic: '',
+                            bearer: '',
+                        },
+                    },
+                    customCss: `
+                        /* Root app styling */
+                        .scalar-app {
+                            --scalar-font: system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+                            --scalar-color-1: #ffffff;
+                            --scalar-color-2: #f8fafc;
+                            --scalar-color-3: #e2e8f0;
+                            --scalar-color-accent: #3b82f6;
+                            --scalar-border-radius: 8px;
+                            --noqodi-blue: #3b82f6;
+                            --noqodi-blue-light: #eff6ff;
+                            --noqodi-blue-dark: #1d4ed8;
+                            font-family: var(--scalar-font);
+                            background: #ffffff;
+                            color: #1e293b;
+                            height: 100% !important;
+                            overflow: hidden !important;
+                            display: flex !important;
+                            flex-direction: row !important;
+                        }
+                        
+                        /* Main layout container */
+                        .scalar-app .references {
+                            height: 100% !important;
+                            width: 100% !important;
+                            display: flex !important;
+                            flex-direction: row !important;
+                            overflow: hidden !important;
+                        }
+                        
+                        /* Sidebar navigation */
+                        .scalar-app .references-sidebar,
+                        .scalar-app .sidebar {
+                            flex-shrink: 0 !important;
+                            width: 280px !important;
+                            height: 100% !important;
+                            overflow-y: auto !important;
+                            overflow-x: hidden !important;
+                            background: #fafbfc !important;
+                            border-right: 1px solid #e6ebf1 !important;
+                        }
+                        
+                        /* Main documentation content */
+                        .scalar-app .references-content,
+                        .scalar-app .content {
+                            flex: 1 !important;
+                            height: 100% !important;
+                            overflow-y: auto !important;
+                            overflow-x: hidden !important;
+                            min-width: 0 !important;
+                            background: #ffffff !important;
+                        }
+                        
+                        /* Hide Try It panel by default - show only on click */
+                        .scalar-app .http-client,
+                        .scalar-app .api-client,
+                        .scalar-app .request-form {
+                            display: none !important;
+                        }
+                        
+                        /* Show Try It as modal/overlay when activated */
+                        .scalar-app .http-client.active,
+                        .scalar-app .api-client.active,
+                        .scalar-app .request-form.active {
+                            display: block !important;
+                            position: fixed !important;
+                            top: 0 !important;
+                            right: 0 !important;
+                            bottom: 0 !important;
+                            width: 450px !important;
+                            background: #ffffff !important;
+                            border-left: 1px solid #e6ebf1 !important;
+                            box-shadow: -2px 0 8px rgba(0, 0, 0, 0.1) !important;
+                            z-index: 1000 !important;
+                            overflow-y: auto !important;
+                        }
+                        
+                        /* Try It button styling */
+                        .scalar-app button[aria-label*="Try"],
+                        .scalar-app button[title*="Try"],
+                        .scalar-app .try-it-button {
+                            background: #3b82f6 !important;
+                            color: #ffffff !important;
+                            border: none !important;
+                            padding: 0.5rem 1rem !important;
+                            border-radius: 4px !important;
+                            font-weight: 500 !important;
+                            cursor: pointer !important;
+                            transition: background 0.2s ease !important;
+                        }
+                        
+                        .scalar-app button[aria-label*="Try"]:hover,
+                        .scalar-app button[title*="Try"]:hover,
+                        .scalar-app .try-it-button:hover {
+                            background: #1d4ed8 !important;
+                        }
+                        
+                        /* Enhanced sidebar styling */
+                        .scalar-app .references-sidebar ul,
+                        .scalar-app .sidebar ul {
+                            list-style: none !important;
+                            padding: 0 !important;
+                            margin: 0 !important;
+                        }
+                        
+                        .scalar-app .references-sidebar li,
+                        .scalar-app .sidebar li {
+                            margin: 0 !important;
+                            padding: 0 !important;
+                        }
+                        
+                        .scalar-app .references-sidebar a,
+                        .scalar-app .sidebar a,
+                        .scalar-app .sidebar-item {
+                            display: block !important;
+                            padding: 0.5rem 1rem !important;
+                            color: #6b7c93 !important;
+                            text-decoration: none !important;
+                            border-radius: 4px !important;
+                            margin: 1px 8px !important;
+                            transition: all 0.15s ease !important;
+                            font-size: 0.875rem !important;
+                        }
+                        
+                        .scalar-app .references-sidebar a:hover,
+                        .scalar-app .sidebar a:hover,
+                        .scalar-app .sidebar-item:hover {
+                            background: #f6f9fc !important;
+                            color: #32325d !important;
+                        }
+                        
+                        .scalar-app .references-sidebar a.active,
+                        .scalar-app .sidebar a.active,
+                        .scalar-app .sidebar-item.active,
+                        .scalar-app .references-sidebar a[aria-current="page"],
+                        .scalar-app .sidebar a[aria-current="page"] {
+                            background: #f6f9fc !important;
+                            color: #32325d !important;
+                            font-weight: 500 !important;
+                            border-left: 2px solid #3b82f6 !important;
+                        }
+                        
+                        /* Section headers in sidebar */
+                        .scalar-app .references-sidebar h3,
+                        .scalar-app .sidebar h3,
+                        .scalar-app .sidebar-section {
+                            color: #32325d !important;
+                            font-weight: 600 !important;
+                            font-size: 0.75rem !important;
+                            text-transform: uppercase !important;
+                            letter-spacing: 0.05em !important;
+                            padding: 1rem 1rem 0.5rem !important;
+                            margin: 0 !important;
+                        }
+                        
+                        /* Headers - subtle hierarchy */
+                        .scalar-app h1, .scalar-app h2, .scalar-app h3, 
+                        .scalar-app h4, .scalar-app h5, .scalar-app h6 {
+                            color: #32325d !important;
+                            font-weight: 600;
+                            letter-spacing: -0.01em;
+                        }
+                        
+                        .scalar-app h1 {
+                            color: #1a1f36 !important;
+                            font-size: 1.875rem;
+                            font-weight: 700;
+                            margin-bottom: 1rem;
+                        }
+                        
+                        .scalar-app p, .scalar-app li, .scalar-app td {
+                            color: #6b7c93 !important;
+                            line-height: 1.6;
+                            font-size: 0.95rem;
+                        }
+                        
+                        /* HTTP method badges with noqodi blue */
+                        .scalar-app [data-method="get"] {
+                            background: #10b981 !important;
+                            color: #ffffff !important;
+                        }
+                        
+                        .scalar-app [data-method="post"] {
+                            background: #3b82f6 !important;
+                            color: #ffffff !important;
+                        }
+                        
+                        .scalar-app [data-method="put"] {
+                            background: #f59e0b !important;
+                            color: #ffffff !important;
+                        }
+                        
+                        .scalar-app [data-method="delete"] {
+                            background: #ef4444 !important;
+                            color: #ffffff !important;
+                        }
+                        
+                        /* Code styling - clean like Stripe */
+                        .scalar-app code {
+                            font-family: 'SFMono-Regular', Consolas, 'Liberation Mono', Menlo, monospace;
+                            background: #f6f9fc !important;
+                            color: #525f7f !important;
+                            padding: 0.125rem 0.375rem;
+                            border-radius: 3px;
+                            font-size: 0.875rem;
+                            border: 1px solid #e6ebf1;
+                        }
+                        
+                        .scalar-app pre {
+                            background: #0e1330 !important;
+                            color: #e6ebf1 !important;
+                            border: 1px solid #2a2e52;
+                            border-radius: 4px;
+                            padding: 1.25rem;
+                            line-height: 1.5;
+                            font-size: 0.875rem;
+                        }
+                        
+                        .scalar-app pre code {
+                            background: transparent !important;
+                            color: #e6ebf1 !important;
+                            border: none;
+                            padding: 0;
+                        }
+                        
+                        /* Links with noqodi blue */
+                        .scalar-app a {
+                            color: #3b82f6 !important;
+                            font-weight: 500;
+                        }
+                        
+                        .scalar-app a:hover {
+                            color: #1d4ed8 !important;
+                        }
+                        
+                        /* Buttons - subtle like Stripe */
+                        .scalar-app button {
+                            background: #635bff !important;
+                            color: #ffffff !important;
+                            border: none;
+                            padding: 0.5rem 1rem;
+                            border-radius: 4px;
+                            font-weight: 500;
+                            font-size: 0.875rem;
+                            cursor: pointer;
+                            transition: all 0.2s ease;
+                        }
+                        
+                        .scalar-app button:hover {
+                            background: #5a52e5 !important;
+                            box-shadow: 0 2px 4px rgba(99, 91, 255, 0.2);
+                        }
+                        
+                        /* Secondary buttons */
+                        .scalar-app button.secondary {
+                            background: #f6f9fc !important;
+                            color: #425466 !important;
+                            border: 1px solid #d9e2ef !important;
+                        }
+                        
+                        .scalar-app button.secondary:hover {
+                            background: #ebf0f7 !important;
+                            border-color: #c7d2df !important;
+                        }
+                        
+                        /* Tables - clean like Stripe */
+                        .scalar-app table {
+                            border-collapse: collapse;
+                            border: 1px solid #e6ebf1;
+                            border-radius: 4px;
+                            overflow: hidden;
+                        }
+                        
+                        .scalar-app th {
+                            background: #fafbfc !important;
+                            color: #32325d !important;
+                            font-weight: 600;
+                            font-size: 0.875rem;
+                            padding: 0.75rem 1rem;
+                            border-bottom: 1px solid #e6ebf1;
+                            text-align: left;
+                        }
+                        
+                        .scalar-app td {
+                            padding: 0.75rem 1rem;
+                            border-bottom: 1px solid #f6f9fc;
+                            color: #6b7c93 !important;
+                            font-size: 0.875rem;
+                        }
+                        
+                        /* Tags and badges - subtle like Stripe */
+                        .scalar-app .badge, .scalar-app .tag {
+                            background: #f6f9fc !important;
+                            color: #525f7f !important;
+                            font-weight: 500;
+                            font-size: 0.75rem;
+                            padding: 0.25rem 0.5rem;
+                            border-radius: 3px;
+                            border: 1px solid #e6ebf1;
+                        }
+                        
+                        /* Documentation content styling */
+                        .scalar-app .references-content {
+                            padding: 2rem !important;
+                        }
+                        
+                        .scalar-app .references-content > div {
+                            max-width: none !important;
+                            width: 100% !important;
+                        }
+                        
+                        /* API operation cards */
+                        .scalar-app .operation {
+                            margin-bottom: 2rem !important;
+                            border: 1px solid #e6ebf1 !important;
+                            border-radius: 8px !important;
+                            overflow: hidden !important;
+                        }
+                        
+                        .scalar-app .operation-header {
+                            padding: 1rem !important;
+                            background: #f8fafc !important;
+                            border-bottom: 1px solid #e6ebf1 !important;
+                        }
+                        
+                        .scalar-app .operation-content {
+                            padding: 1.5rem !important;
+                        }
+                        
+                        /* Mobile adjustments */
+                        @media (max-width: 768px) {
+                            .scalar-app {
+                                flex-direction: column !important;
+                            }
+                            
+                            .scalar-app .references {
+                                flex-direction: column !important;
+                            }
+                            
+                            .scalar-app .references-sidebar,
+                            .scalar-app .sidebar {
+                                width: 100% !important;
+                                height: auto !important;
+                                max-height: 300px !important;
+                                border-right: none !important;
+                                border-bottom: 1px solid #e6ebf1 !important;
+                            }
+                            
+                            .scalar-app .http-client.active,
+                            .scalar-app .api-client.active {
+                                position: fixed !important;
+                                top: 0 !important;
+                                left: 0 !important;
+                                right: 0 !important;
+                                bottom: 0 !important;
+                                width: 100% !important;
+                                z-index: 1000 !important;
+                            }
+                        }
+                    `,
+                    configuration: {
+                        sidebar: {
+                            defaultOpen: true,
+                        },
+                        content: {
+                            defaultView: 'documentation',
+                        },
+                        httpClient: {
+                            defaultOpen: false,
+                        },
+                    },
+                    metaData: {
+                        title: 'noqodi API Documentation',
+                        description: 'Interactive API documentation powered by Scalar',
+                    },
+                    searchHotKey: 'k',
+                });
+                
+                console.log('Scalar API reference created successfully');
+                
+            } catch (error) {
+                console.error('Failed to initialize Scalar:', error);
+                showErrorMessage(error);
+            }
+        } else {
+            retryCount++;
+            if (retryCount < maxRetries) {
+                console.log(`Scalar not ready yet, retrying in 200ms... (${retryCount}/${maxRetries})`);
+                setTimeout(initializeScalar, 200);
+            } else {
+                console.error('Max retries reached, Scalar failed to load');
+                showErrorMessage(new Error('Scalar library failed to load after multiple attempts'));
+            }
+        }
+    }
+    
+    function showErrorMessage(error) {
+        const container = document.getElementById('scalar-api-reference');
+        if (container) {
+            container.innerHTML = `
+                <div class="error-message">
+                    <h2>API Documentation Error</h2>
+                    <p>Failed to load API documentation. Please check the console for details.</p>
+                    <p><strong>Error:</strong> ${error.message}</p>
+                    <p><strong>Spec URL:</strong> ${specUrl}</p>
+                    <p><strong>CDN Status:</strong> ${typeof Scalar !== 'undefined' ? 'Loaded' : 'Failed to load'}</p>
+                    <button onclick="location.reload()" class="retry-button">Retry</button>
+                </div>
+            `;
+        }
+    }
+
+    // Initialize when DOM is ready
+    async function startInitialization() {
+        try {
+            console.log('Loading Scalar script...');
+            await loadScalarScript();
+            console.log('Scalar script loaded, initializing...');
+            initializeScalar();
+        } catch (error) {
+            console.error('Failed to load Scalar script:', error);
+            showErrorMessage(new Error('Failed to load Scalar library from CDN'));
+        }
+    }
+    
+    if (document.readyState === 'loading') {
+        document.addEventListener('DOMContentLoaded', startInitialization);
+    } else {
+        startInitialization();
+    }
+</script>
+
+<style>
+    .scalar-container {
+        width: 100%;
+        height: 100%;
+        background: var(--sl-color-bg);
+        overflow: hidden;
+        position: relative;
+        display: flex;
+        flex-direction: column;
+    }
+    
+    /* Loading placeholder */
+    .loading-placeholder {
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+        height: 100%;
+        color: var(--sl-color-text);
+    }
+    
+    .loading-spinner {
+        width: 40px;
+        height: 40px;
+        border: 3px solid var(--sl-color-gray-5);
+        border-top: 3px solid var(--sl-color-accent);
+        border-radius: 50%;
+        animation: spin 1s linear infinite;
+        margin-bottom: 1rem;
+    }
+    
+    @keyframes spin {
+        0% { transform: rotate(0deg); }
+        100% { transform: rotate(360deg); }
+    }
+    
+    /* Error message styling */
+    .scalar-container :global(.error-message) {
+        padding: 2rem;
+        text-align: center;
+        color: var(--sl-color-text);
+        height: 100%;
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+    }
+    
+    .scalar-container :global(.error-message h2) {
+        color: #ef4444;
+        margin-bottom: 1rem;
+    }
+    
+    .scalar-container :global(.error-message p) {
+        margin-bottom: 0.5rem;
+        color: var(--sl-color-text-invert);
+    }
+    
+    .scalar-container :global(.retry-button) {
+        background: var(--sl-color-accent);
+        color: white;
+        border: none;
+        padding: 0.75rem 1.5rem;
+        border-radius: 0.375rem;
+        cursor: pointer;
+        font-weight: 500;
+        margin-top: 1rem;
+        transition: background 0.2s ease;
+    }
+    
+    .scalar-container :global(.retry-button:hover) {
+        background: var(--sl-color-accent-high);
+    }
+    
+    /* Ensure Scalar takes full available space */
+    .scalar-container :global(.scalar-app) {
+        height: 100%;
+        width: 100%;
+        font-family: system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+    }
+    
+    /* Responsive design */
+    @media (max-width: 768px) {
+        .scalar-container {
+            height: 100%;
+            overflow-y: auto;
+        }
+        
+        .scalar-container :global(.scalar-app) {
+            height: auto !important;
+            min-height: 100%;
+        }
+        
+        .scalar-container :global(.scalar-app > div) {
+            flex-direction: column !important;
+            height: auto !important;
+        }
+        
+        .scalar-container :global(.scalar-app .scalar-sidebar) {
+            width: 100% !important;
+            height: auto !important;
+            max-height: 50vh;
+            overflow-y: auto !important;
+        }
+        
+        .scalar-container :global(.scalar-app .scalar-content) {
+            height: auto !important;
+            overflow-y: visible !important;
+        }
+    }
+</style>

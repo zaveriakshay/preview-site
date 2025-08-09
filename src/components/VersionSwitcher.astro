@@ -1,0 +1,220 @@
+---
+// src/components/VersionSwitcher.astro
+import { getAvailableVersions, parseCurrentPath, generateVersionPath, checkVersionExists } from '../utils/versions.ts';
+
+interface Props {
+    currentVersion?: string;
+    currentPath?: string;
+    showDescription?: boolean;
+}
+
+const { showDescription = true } = Astro.props;
+
+// Parse the current path to extract language, guide type, and version
+const currentPath = Astro.url.pathname;
+const pathInfo = parseCurrentPath(currentPath);
+const currentVersion = pathInfo.version;
+
+// Dynamically get available versions for the current language and guide type
+const availableVersions = await getAvailableVersions(pathInfo.language, pathInfo.guideType);
+
+// Function to switch version in current path
+const getVersionPath = (newVersion: string) => {
+    return generateVersionPath(currentPath, newVersion);
+};
+
+// Check if target version page exists
+const isVersionAvailable = async (version: string) => {
+    if (!pathInfo.guideType) return true;
+    
+    // Extract current page from path (everything after version)
+    const pathParts = currentPath.split('/').filter(Boolean);
+    const currentPage = pathParts.slice(4).join('/'); // Everything after version
+    
+    return await checkVersionExists(pathInfo.language, pathInfo.guideType, version, currentPage);
+};
+---
+
+<div class="version-switcher">
+    <div class="version-header">
+        <div class="context-info">
+            <span class="context-badge">
+                {pathInfo.language.toUpperCase()} • {pathInfo.guideType ? pathInfo.guideType.charAt(0).toUpperCase() + pathInfo.guideType.slice(1) : 'Guides'}
+            </span>
+        </div>
+        
+        <div class="version-selector">
+            <label for="version-select" class="sr-only">Select Documentation Version</label>
+            <select
+                    id="version-select"
+                    class="version-select"
+                    onchange="window.location.href = this.value"
+            >
+                {availableVersions.map(version => (
+                        <option
+                                value={getVersionPath(version.version)}
+                                selected={currentVersion === version.version}
+                        >
+                            {version.version} {version.badge ? `(${version.badge})` : ''}
+                        </option>
+                ))}
+            </select>
+        </div>
+    </div>
+
+    <!-- Compact version badges -->
+    <div class="version-badges">
+        {availableVersions.map(version => (
+                <button
+                        class={`version-badge ${version.version === currentVersion ? 'active' : ''} ${version.badge ? version.badge.toLowerCase() : ''}`}
+                        onclick={`window.location.href = '${getVersionPath(version.version)}'`}
+                        title={`Switch to ${version.version} ${version.badge ? `(${version.badge})` : ''}`}
+                        type="button"
+                >
+                    {version.version.replace('v', '')}
+                </button>
+        ))}
+    </div>
+</div>
+
+<style>
+    .version-switcher {
+        padding: 0.5rem;
+        border: 1px solid var(--sl-color-gray-5);
+        border-radius: 0.375rem;
+        background: var(--sl-color-bg-sidebar);
+        margin-bottom: 0.75rem;
+    }
+
+    .version-header {
+        display: flex;
+        flex-direction: column;
+        gap: 0.5rem;
+    }
+
+    .context-info {
+        display: flex;
+        justify-content: center;
+    }
+
+    .context-badge {
+        font-size: 0.6875rem;
+        color: var(--sl-color-text-invert);
+        background: var(--sl-color-accent-low);
+        padding: 0.125rem 0.375rem;
+        border-radius: 0.1875rem;
+        font-weight: 500;
+        text-transform: uppercase;
+        letter-spacing: 0.025em;
+    }
+
+    .version-selector {
+        display: none; /* Hide dropdown, use badges instead */
+    }
+
+    .version-select {
+        width: 100%;
+        padding: 0.5rem;
+        border: 1px solid var(--sl-color-gray-4);
+        border-radius: 0.25rem;
+        background: var(--sl-color-bg);
+        color: var(--sl-color-text);
+        font-size: 0.8125rem;
+        cursor: pointer;
+        transition: all 0.2s ease;
+    }
+
+    .version-select:hover {
+        border-color: var(--sl-color-accent);
+    }
+
+    .version-select:focus {
+        outline: 2px solid var(--sl-color-accent);
+        outline-offset: 1px;
+        border-color: var(--sl-color-accent);
+    }
+
+    .version-badges {
+        display: flex;
+        gap: 0.25rem;
+        justify-content: center;
+        flex-wrap: wrap;
+    }
+
+    .version-badge {
+        padding: 0.375rem 0.75rem;
+        border-radius: 1.5rem;
+        font-size: 0.75rem;
+        font-weight: 600;
+        border: 1.5px solid var(--sl-color-gray-4);
+        background: var(--sl-color-bg);
+        color: var(--sl-color-text-invert);
+        cursor: pointer;
+        transition: all 0.15s ease;
+        min-width: 2rem;
+        text-align: center;
+    }
+
+    .version-badge:hover {
+        border-color: var(--sl-color-accent);
+        color: var(--sl-color-accent);
+        transform: translateY(-1px);
+        box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+    }
+
+    .version-badge.active {
+        background: var(--sl-color-accent);
+        border-color: var(--sl-color-accent);
+        color: white;
+        font-weight: 700;
+    }
+
+    .version-badge.latest:not(.active) {
+        border-color: var(--sl-color-green);
+        color: var(--sl-color-green);
+    }
+
+    .version-badge.legacy:not(.active) {
+        border-color: var(--sl-color-orange);
+        color: var(--sl-color-orange);
+    }
+
+    /* Responsive design */
+    @media (max-width: 768px) {
+        .version-switcher {
+            padding: 0.375rem;
+            margin-bottom: 0.5rem;
+        }
+
+        .context-badge {
+            font-size: 0.625rem;
+            padding: 0.0625rem 0.25rem;
+        }
+
+        .version-badge {
+            padding: 0.25rem 0.5rem;
+            font-size: 0.6875rem;
+            min-width: 1.75rem;
+        }
+    }
+
+    /* Show dropdown on very small screens */
+    @media (max-width: 480px) {
+        .version-selector {
+            display: block;
+        }
+
+        .version-badges {
+            display: none;
+        }
+    }
+</style>
+
+<script>
+    // Add version badge styling
+    document.querySelectorAll('option').forEach(option => {
+        if (option.textContent?.includes('Latest')) {
+            option.style.fontWeight = 'bold';
+        }
+    });
+</script>
