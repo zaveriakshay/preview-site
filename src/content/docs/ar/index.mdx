@@ -1,0 +1,37 @@
+---
+title: مرحبًا بكم في وثائق noqodi
+template: doc
+dir: rtl
+---
+import '../../../styles/homepage.css';
+import HomepageCard from '../../../components/HomepageCard.astro';
+import HomepageBackground from '../../../components/HomepageBackground.astro';
+
+<div class="homepage-hero" dir="rtl">
+    <HomepageBackground />
+    <h1>الوثائق</h1>
+    <p class="tagline">استكشف أدلتنا وأمثلتنا لدمج noqodi.</p>
+</div>
+
+<div class="homepage-cards" dir="rtl">
+    <div class="homepage-card-grid">
+        <HomepageCard 
+            title="أدلة الويب" 
+            icon="document"
+            description="دروس تعليمية خطوة بخطوة لمنصتنا على الويب وتكاملاتها."
+            href="/ar/guides/web/v2"
+        />
+        <HomepageCard
+            title="أدلة الموبايل" 
+            icon="setting"
+            description="أدلة مفصلة لتطبيقات الهاتف المحمول وحزم SDK الخاصة بنا."
+            href="/ar/guides/mobile/v2"
+        />
+        <HomepageCard 
+            title="سجل التغييرات" 
+            icon="history"
+            description="ابق على اطلاع بآخر التغييرات والتحسينات."
+            href="/ar/changelogs"
+        />
+    </div>
+</div>

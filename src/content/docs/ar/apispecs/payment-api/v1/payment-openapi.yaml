@@ -1,0 +1,2019 @@
+openapi: 3.0.3
+info:
+  title: Payment API
+  description: |
+    This document provides the OpenAPI specification for integrating with the noqodi V2 API.
+    It is based on the "noqodi Integration Guide - TDRA Version 3 1.pdf" document. The API is divided into two main categories: Payments and Refunds.
+
+    ### High-level Process Flow
+    Integration can be accomplished in a few easy steps:
+    1.  **Sign Up/Get Client Credentials**: Contact the noqodi team to get your credentials.
+    2.  **Obtain Access Token**: Use the `/oauth/token/client-credentials` endpoint to get a bearer token.
+    3.  **Consume APIs**: Use the obtained access token to call the various payment and refund APIs.
+  version: 1.0.0
+servers:
+  - url: https://{noqodi-v2-api-base-url}
+    description: The base URL for the noqodi V2 API.
+    variables:
+      noqodi-v2-api-base-url:
+        default: api-dev02.noqodi.com
+        description: |
+          The environment-specific base URL. Replace this with the appropriate URL for the environment you are targeting.
+          - **Development**: `api-dev02.noqodi.com`
+          - **QA**: `api-qa.noqodi.com`
+          - **UAT**: `api-stg02.noqodi.com`
+          - **Performance**: `api-stg01.noqodi.com`
+        enum:
+          - api-dev02.noqodi.com
+          - api-qa.noqodi.com
+          - api-stg02.noqodi.com
+          - api-stg01.noqodi.com
+security:
+  - bearerAuth: []
+paths:
+  /oauth/token/client-credentials:
+    post:
+      operationId: getAccessToken
+      summary: Obtain Access Token
+      description: |
+        This endpoint uses the **OAuth 2.0 Client Credentials Flow** to obtain a bearer access token.
+        You must provide your `client_id` and `client_secret` to authenticate. The returned `access_token` is then used in the `Authorization` header for all subsequent API calls (e.g., `Authorization: Bearer <access_token>`).
+
+        ### Request Details
+        - **HTTP Method**: `POST`
+        - **Content-Type**: `application/x-www-form-urlencoded`
+      tags:
+        - Authentication
+      requestBody:
+        required: true
+        content:
+          application/x-www-form-urlencoded:
+            schema:
+              type: object
+              required:
+                - grant_type
+                - client_id
+                - client_secret
+              properties:
+                grant_type:
+                  type: string
+                  description: "The grant type. Must be `client_credentials`."
+                  enum: [client_credentials]
+                  default: client_credentials
+                client_id:
+                  type: string
+                  description: "Your unique client ID provided by noqodi."
+                  example: "your-client-id"
+                client_secret:
+                  type: string
+                  description: "Your client secret provided by noqodi."
+                  example: "your-client-secret"
+      responses:
+        '200':
+          description: "Successful response containing the access token."
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  application_name:
+                    type: string
+                  developer.email:
+                    type: string
+                    format: email
+                  client_id:
+                    type: string
+                  token_type:
+                    type: string
+                    description: "The type of token, which will always be 'BearerToken'."
+                  access_token:
+                    type: string
+                    description: "The access token to be used for subsequent API calls."
+                  issued_at:
+                    type: string
+                  expires_in:
+                    type: string
+                    description: "The validity of the access token in seconds."
+                  status:
+                    type: string
+                    description: "A valid token must have the status value 'approved'."
+                  scope:
+                    type: string
+                    description: "Approved OAuth scopes."
+                  statusinfo:
+                    $ref: '#/components/schemas/StatusInfoSuccess'
+              example:
+                application_name: "xxx-xxx-xxx-xxx-xxx"
+                developer.email: "your.name@example.com"
+                client_id: "xxXXXXXXXXXXXXXXX"
+                token_type: "BearerToken"
+                access_token: "2eraBKrh6NhQzWG1HUEt2TDEmkTb"
+                issued_at: "1564900212609"
+                expires_in: "299"
+                status: "approved"
+                scope: "payouts balances payments refunds"
+                statusinfo:
+                  status: "SUCCESS"
+        '400':
+          description: "Failed response due to invalid credentials."
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  statusinfo:
+                    $ref: '#/components/schemas/StatusInfoFailure'
+              example:
+                statusinfo:
+                  status: "FAILURE"
+                  error:
+                    code: "INVALID_CLIENT_CREDENTIALS"
+                    message: "Either client ID or client secret is incorrect"
+  /v3/payments/token/createLinks:
+    post:
+      operationId: createPreAuthToken
+      summary: Pre Auth Service
+      description: |
+        Get a payment request token, along with the pricing information for the requested payment type. This token is required in the next step of the payment chain.
+
+        ### Request Field Descriptions
+        | Name | Type | Required | Min Length | Max Length | Default Value | Description |
+        | --- | --- | --- | --- | --- | --- | --- |
+        | `serviceType` | String | YES | N/A | N/A | N/A | Type of service - and its value must be "PRE_AUTH" |
+        | `serviceMode` | String | YES | N/A | N/A | N/A | Mode of service - which must be one of the following: NORMAL for standard payment |
+        | `customerInfo.name` | String | No | N/A | N/A | N/A | Optional - The Customer's name |
+        | `customerInfo.mobile` | String | No | N/A | N/A | N/A | Optional - The Customer's mobile |
+        | `customerInfo.email` | String | No | N/A | N/A | N/A | Optional - The Customer's email |
+        | `paymentInfo.amount.value` | Numeric | YES | N/A | N/A | N/A | The Total Amount for the Transaction |
+        | `paymentInfo.pricingInfo.paymentTypes` | String Array | NO | N/A | N/A | N/A | Optional - If present, can be one of: ECA (wallet), CCD (credit card), DDB (net-banking). If absent, system will take all configured payment types for the merchant. |
+        | `paymentInfo.amount.currency` | String | YES | 3 | 3 | N/A | Three-letter ISO currency code |
+        | `merchantInfo.merchantCode` | String | YES | N/A | N/A | N/A | Merchant Identifier generated by noqodi. |
+        | `merchantInfo.merchantRequestId` | String | YES | N/A | N/A | N/A | Auto generated UUID by the service consumer (unique for each transaction). |
+        | `merchantInfo.merchantOrderId` | String | YES | N/A | N/A | N/A | Unique String Identifier generated by the service consumer (generated once for the entire payment cycle). |
+        | `merchantInfo.merchantLandingURL` | String | NO | N/A | N/A | N/A | Optional Merchant URL to redirect back to from noqodi page. |
+
+        ### Response Field Descriptions
+        | Name | Type | Min Length | Max Length | Default Value | Description |
+        | --- | --- | --- | --- | --- | --- |
+        | `customerInfo.userid` | String | N/A | N/A | N/A | Optional - The User identifier of the customer |
+        | `customerInfo.mobile` | String | N/A | N/A | N/A | Optional - The Customer's mobile |
+        | `customerInfo.email` | String | N/A | N/A | N/A | Optional - The Customer's email |
+        | `paymentInfo.preAuthToken` | String | N/A | N/A | N/A | Payment Request Token - Auto generated UUID by noqodi. |
+        | `paymentInfo.pricingInfo.pricing.paymentType` | String | N/A | N/A | N/A | The payment type sent in the request. |
+        | `paymentInfo.pricingInfo.pricing.borneBy` | String | N/A | N/A | N/A | The party who will pay the pricing amount. |
+        | `paymentInfo.pricingInfo.pricing.fees.value` | Numeric | N/A | N/A | N/A | The noqodi Fee Amount for the payment type. |
+        | `paymentInfo.pricingInfo.pricing.fees.currency` | String | 3 | 3 | N/A | Three-letter ISO currency code. |
+        | `paymentInfo.pricingInfo.pricing.vat.value` | Numeric | N/A | N/A | N/A | The VAT Amount on noqodi Fee for the payment type. |
+        | `paymentInfo.pricingInfo.pricing.vat.currency` | String | 3 | 3 | N/A | Three-letter ISO currency code. |
+        | `paymentInfo.transactionDate` | String | N/A | N/A | N/A | Transaction Date generated by noqodi. Format: "dd-MM-yyyy HH:mm:ss" |
+      tags:
+        - Payments
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PreAuthRequest'
+            examples:
+              fullRequest:
+                summary: "A full request example for Pre-Auth"
+                value:
+                  serviceType: "PRE_AUTH"
+                  serviceMode: "NORMAL"
+                  source: "UAEPAY"
+                  merchantCode: "MR116589"
+                  paymentInitiator:
+                    name: "Shajahan"
+                    email: "sdssdd@sdds.sd"
+                    mobileNumber: "534343323"
+                    emiratesid: "3434434334"
+                  paymentLinksinfo:
+                    - merchantLandingURL: "https://www.test.com"
+                      merchantRequestId: "82c6b2b0-dc22-4e15-92b9-508c44410336"
+                      merchantOrderId: "703203e9-f2c9-4376-9ed6-de7f39b56853"
+                      amount: 100
+                      paymentRemarks: "Medical + Visa Fees"
+                      serviceProvided: "true"
+                      autoReconciled: false
+                      metaData:
+                        key: "value can be string integer json object or array"
+                        key1: 12345
+                        key2: {}
+                        key3: []
+                        name: "John Smith"
+                        phone: 520000000
+                      bnplPaymentInfo:
+                        buyerRequestData:
+                          phone: "+971500000001"
+                          email: "otp.success@tabby.ai"
+                          name: "Hamada Abdrabou"
+                        shippingAddressRequestData:
+                          city: "Ras Al Khaimah"
+                          address: "villa 12, Room No, Floor No 12, Al Mamourah"
+                        orderRequestData:
+                          orderCount: 1
+                          itemsRequestData:
+                            - title: "Anastasia Beverly Hills Liquid Lipstick, Pink"
+                              quantity: "1"
+                              unitPrice: 100
+                              category: "Makeup"
+                        buyerHistoryRequestData:
+                          registeredSince: "2024-05-31T09:05:00.422Z"
+                          loyaltyLevel: 0
+      responses:
+        '200':
+          description: "Successful or partially successful response."
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PreAuthResponse'
+              examples:
+                success:
+                  summary: "Successful Response"
+                  value:
+                    serviceType: "PRE_AUTH"
+                    serviceMode: "NORMAL"
+                    merchantCode: "MR116589"
+                    paymentLinksInfo:
+                      - merchantRequestId: "b85494e4-afae-4621-9385-51658f57d43b"
+                        merchantOrderId: "aab8d238-e078-4d9c-9bce-5a3f497dafe6"
+                        paymentUrl: "https://pay-dev02.noqodi.com/noqodi-payment?paymentRequestToken=950fc501-7bd1-416d-ae85-e0049a14dd78&hosted=true"
+                        paymentRequestToken: "950fc501-7bd1-416d-ae85-e0049a14dd78"
+                    statusinfo:
+                      status: "SUCCESS"
+                businessValidationError:
+                  summary: "Response if link generation failed with business validation"
+                  value:
+                    serviceType: "PRE_AUTH"
+                    serviceMode: "NORMAL"
+                    merchantCode: "MR116589"
+                    paymentLinksInfo:
+                      - merchantOrderId: "01ba5e6c-20ef-4814-a7ca-a7930eb27e08"
+                        error:
+                          code: "REQUEST_ID_REQUIRED"
+                          message: "Request Id is required."
+                          traceId: "8d9be4b2440f0"
+                    statusinfo:
+                      status: "SUCCESS"
+        '400':
+          description: "Failed response for the given request."
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  serviceType:
+                    type: string
+                  serviceMode:
+                    type: string
+                  merchantCode:
+                    type: string
+                  statusinfo:
+                    $ref: '#/components/schemas/StatusInfoFailure'
+              example:
+                serviceType: "PRE_AUTH"
+                serviceMode: "NORMAL"
+                merchantCode: "MR116589"
+                statusinfo:
+                  status: "FAILURE"
+                  error:
+                    code: "MERCHANT_DISABLED"
+                    message: "Merchant is disabled"
+                    traceId: "1cc15a9dd144da"
+  /v3/payments/token/cancel:
+    post:
+      operationId: cancelPreAuthToken
+      summary: Cancel/Expire Pre Auth Service
+      description: "Cancel or expire an unused payment request token."
+      tags:
+        - Payments
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - serviceType
+                - serviceMode
+                - merchantCode
+                - source
+                - paymentRequestToken
+              properties:
+                serviceType:
+                  type: string
+                  enum: [PRE_AUTH]
+                  default: "PRE_AUTH"
+                serviceMode:
+                  type: string
+                  enum: [NORMAL]
+                  default: "NORMAL"
+                merchantCode:
+                  type: string
+                  example: "MR116589"
+                source:
+                  type: string
+                  example: "UAEPAY"
+                paymentRequestToken:
+                  type: string
+                  format: uuid
+                  example: "13d64ead-e96c-4eb1-873b-30c757197bc5"
+            example:
+              serviceType: "PRE_AUTH"
+              serviceMode: "NORMAL"
+              merchantCode: "MR116589"
+              source: "UAEPAY"
+              paymentRequestToken: "13d64ead-e96c-4eb1-873b-30c757197bc5"
+      responses:
+        '200':
+          description: "Successful cancellation response."
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  serviceType:
+                    type: string
+                  merchantCode:
+                    type: string
+                  paymentRequestToken:
+                    type: string
+                    format: uuid
+                  statusinfo:
+                    $ref: '#/components/schemas/StatusInfoSuccess'
+              example:
+                serviceType: "PRE_AUTH"
+                merchantCode: "MR116589"
+                paymentRequestToken: "13d64ead-e96c-4eb1-873b-30c757197bc5"
+                statusinfo:
+                  status: "SUCCESS"
+        '404':
+          description: "Failure response if the active token does not exist."
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  statusinfo:
+                    $ref: '#/components/schemas/StatusInfoFailure'
+              example:
+                statusinfo:
+                  status: "FAILURE"
+                  error:
+                    code: "NO_TRANSACTION_FOUND"
+                    message: "No transaction found for -950fc501-7bd1-416d-ae85-e0049a14dd73"
+                    traceId: "8db89df93c734"
+  /v2/payments/auth/{id}:
+    get:
+      operationId: getPaymentAuthInquiry
+      summary: Payment Authorization Inquiry
+      description: |
+        Get the payment authorization details using the noqodi response unique identifier.
+
+        ### Request Field Descriptions
+        | Name | Type | Required | Min Length | Max Length | Default Value | Description |
+        | --- | --- | --- | --- | --- | --- | --- |
+        | `id` (in path) | String | YES | N/A | N/A | N/A | noqodi response unique identifier (`noqodiResponseId`). |
+
+        ### Response Field Descriptions
+        | Name | Type | Min Length | Max Length | Default Value | Description |
+        | --- | --- | --- | --- | --- | --- |
+        | `id` | String | N/A | N/A | N/A | Same as the `noqodiResponseId` in the request. |
+        | `serviceType` | String | N/A | N/A | N/A | Type of service - and its value will always be "AUTH". |
+        | `serviceMode` | String | N/A | N/A | N/A | Mode of service - which will be one of: `Normal`, `XPRESS`, `DIRECT`. |
+        | `merchantInfo.merchantCode` | String | N/A | N/A | N/A | Merchant Identifier generated by noqodi. |
+        | `merchantInfo.merchantRequestId` | String | N/A | N/A | N/A | Auto generated UUID by the service consumer. |
+        | `merchantInfo.merchantOrderId` | String | N/A | N/A | N/A | Unique String Identifier generated by the service consumer. |
+        | `merchantInfo.merchantLandingURL` | String | N/A | N/A | N/A | Merchant URL to redirect back to from noqodi page. |
+        | `customerInfo.paymentMethod.type` | String | N/A | N/A | N/A | The payment method - "ECA" or "CCD". |
+        | `paymentInfo.amount.value` | Numeric | N/A | N/A | N/A | The Total Amount for the Transaction. |
+        | `paymentInfo.amount.currency` | String | 3 | 3 | N/A | Three-letter ISO currency code. |
+        | `paymentInfo.transactionDate` | String | N/A | N/A | N/A | Transaction Date generated by noqodi. Format: "dd-MM-yyyy HH:mm:ss". |
+        | `paymentInfo.noqodiOrderId` | String | N/A | N/A | N/A | Auto generated UUID by noqodi, referenced in subsequent transactions. |
+        | `statusinfo.status` | String | N/A | N/A | N/A | SUCCESS / FAILURE / INITIATED / PENDING. |
+      tags:
+        - Payments
+      parameters:
+        - name: id
+          in: path
+          required: true
+          description: "The unique identifier for the noqodi response (`noqodiResponseId`)."
+          schema:
+            type: string
+            example: "aTJPM3dibXVQK1pVdllxNThWSORSTWJqOGtLVDk5V2d6L1hRc0ttWEJOS0lkSk15"
+      responses:
+        '200':
+          description: "Successful retrieval of authorization details."
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AuthInquiryResponse'
+              example:
+                id: "aTJPM3dibXVQK1pVdllxNThWSORSTWJqOGtLVDk5V2d6L1hRc0ttWEJOS0lkSk15MXZYVEFzMytPSXM2bUpWZA=="
+                serviceType: "AUTH"
+                serviceMode: "DIRECT"
+                customerInfo:
+                  paymentMethod:
+                    type: "CCD"
+                    creditCardInfo: {}
+                merchantInfo:
+                  merchantCode: "MR101854"
+                  merchantLandingURL: "http://merchantapi.com/confirm?response="
+                  merchantRequestId: "d6656c45-d3f6-43f0-b5db-2b00c8f2d9ad"
+                  merchantOrderId: "2345831268300"
+                paymentInfo:
+                  amount:
+                    value: 100.00
+                    currency: "AED"
+                  noqodiOrderId: "eb9e8579-dcc5-44f4-b109-fa2001953fd1"
+                  cardRRN: "932907309360"
+                  cardAuthCode: "309360"
+                  cardMaskNumber: "512345xxxxxx2346"
+                  customerReferenceId: "D2PXQ1574666215037"
+                  preAuthToken: "67b63457-ee17-4d0b-88a5-916c1c68d5d7"
+                  transactionDate: "25-11-2019 11:16:55"
+                statusinfo:
+                  status: "SUCCESS"
+        '404':
+          description: "Transaction Not Found."
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  statusinfo:
+                    $ref: '#/components/schemas/StatusInfoFailure'
+              example:
+                statusinfo:
+                  status: "FAILURE"
+                  errorCode:
+                    code: "TRANSACTION_NOT_FOUND"
+                    message: "Transaction Not Found"
+  /v2/payments/voidAuth:
+    post:
+      operationId: createVoidAuth
+      summary: Void Auth
+      description: |
+        Invalidate or cancel a payment authorization.
+
+        ### Request Field Descriptions
+        | Name | Type | Required | Min Length | Max Length | Default Value | Description |
+        | --- | --- | --- | --- | --- | --- | --- |
+        | `serviceType` | String | YES | N/A | N/A | N/A | Type of service - and its value must be "VOID_AUTH". |
+        | `merchantInfo.merchantCode` | String | YES | N/A | N/A | N/A | Merchant Identifier generated by noqodi. |
+        | `merchantInfo.merchantRequestId` | String | YES | N/A | N/A | N/A | Auto generated UUID by the service consumer. |
+        | `merchantInfo.merchantOrderId` | String | YES | N/A | N/A | N/A | Unique String Identifier generated by the service consumer. |
+        | `paymentInfo.noqodiOrderId` | String | YES | N/A | N/A | N/A | Auto generated UUID by noqodi from AUTH Response. |
+
+        ### Response Field Descriptions
+        | Name | Type | Min Length | Max Length | Default Value | Description |
+        | --- | --- | --- | --- | --- | --- |
+        | `id` | String | N/A | N/A | N/A | Auto generated UUID by noqodi, used for the VOID AUTH Inquiry method. |
+        | `customerInfo.paymentMethod.type` | String | N/A | N/A | N/A | The payment method ("ECA" or "CCD") from the prior AUTH Response. |
+        | `paymentInfo.amount.value` | Numeric | N/A | N/A | N/A | The Total Amount for the Transaction. |
+        | `paymentInfo.amount.currency` | String | 3 | 3 | N/A | Three-letter ISO currency code. |
+        | `paymentInfo.transactionDate` | String | N/A | N/A | N/A | Transaction Date generated by noqodi. Format: "dd-MM-yyyy HH:mm:ss". |
+      tags:
+        - Payments
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/VoidAuthRequest'
+            example:
+              serviceType: "VOID_AUTH"
+              merchantInfo:
+                merchantCode: "MR101993"
+                merchantRequestId: "3b357727-7d1e-26e-8140-97514f2bef2c"
+                merchantOrderId: "2345831268305"
+              paymentInfo:
+                noqodiOrderId: "2a8794ab-c423-492a-a5ce-bf78bf24a4cb"
+      responses:
+        '200':
+          description: "Successful void authorization."
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/VoidAuthResponse'
+              example:
+                id: "fe8454f1-48dd-4b2e-bb1b-a48f15022ee8"
+                serviceType: "VOID_AUTH"
+                serviceMode: "NORMAL"
+                customerInfo:
+                  userId: "anutest"
+                  paymentMethod:
+                    type: "ECA"
+                merchantInfo:
+                  merchantCode: "MR101993"
+                  merchantRequestId: "3b357727-7d1e-26e-8140-97514f2bef2c"
+                  merchantOrderId: "2345831268305"
+                paymentInfo:
+                  amount:
+                    value: 100.00
+                    currency: "AED"
+                  noqodiOrderId: "2a8794ab-c423-492a-a5ce-bf78bf24a4cb"
+                  transactionDate: "26-11-2019 15:10:35"
+                  transactionCount: "2"
+                statusinfo:
+                  status: "SUCCESS"
+        '400':
+          description: "Failure response for void authorization."
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  statusinfo:
+                    $ref: '#/components/schemas/StatusInfoFailure'
+              example:
+                statusinfo:
+                  status: "FAILURE"
+                  errorCode:
+                    code: "TRANSACTION_ALREADY_INITIATED"
+                    message: "Oops... you have already initiated the payment process"
+  /v2/payments/voidAuth/{noqodiResponseId}:
+    get:
+      operationId: getVoidAuthInquiry
+      summary: Void Auth Inquiry
+      description: |
+        Get the void auth payment details using the noqodi response unique identifier.
+
+        ### Request Field Descriptions
+        | Name | Type | Required | Min Length | Max Length | Default Value | Description |
+        | --- | --- | --- | --- | --- | --- | --- |
+        | `noqodiResponseId` (in path) | String | YES | N/A | N/A | N/A | noqodi response unique identifier. |
+
+        ### Response Field Descriptions
+        | Name | Type | Min Length | Max Length | Default Value | Description |
+        | --- | --- | --- | --- | --- | --- |
+        | `id` | String | N/A | N/A | N/A | Same as the `noqodiResponseId` in the request. |
+        | `serviceType` | String | N/A | N/A | N/A | Type of service - its value will always be "AUTH". |
+        | `customerInfo.paymentMethod.type` | String | N/A | N/A | N/A | The payment method ("ECA" or "CCD") from the prior AUTH Response. |
+        | `paymentInfo.amount.value` | Numeric | N/A | N/A | N/A | The Total Amount for the Transaction. |
+        | `paymentInfo.amount.currency` | String | 3 | 3 | N/A | Three-letter ISO currency code. |
+        | `merchantInfo.merchantCode` | String | N/A | N/A | N/A | Merchant Identifier generated by noqodi. |
+        | `merchantInfo.merchantRequestId` | String | N/A | N/A | N/A | Auto generated UUID by the service consumer. |
+        | `merchantInfo.merchantOrderId` | String | N/A | N/A | N/A | Unique String Identifier generated by the service consumer. |
+        | `paymentInfo.noqodiOrderId` | String | N/A | N/A | N/A | Auto generated UUID by noqodi from AUTH Response. |
+        | `paymentInfo.transactionDate` | String | N/A | N/A | N/A | Transaction Date generated by noqodi. Format: "dd-MM-yyyy HH:mm:ss". |
+      tags:
+        - Payments
+      parameters:
+        - name: noqodiResponseId
+          in: path
+          required: true
+          description: "The unique identifier from a previous noqodi response."
+          schema:
+            type: string
+            example: "c170bfe5-264d-462b-b2bd-688131db451c"
+      responses:
+        '200':
+          description: "Successful retrieval of void auth details."
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/VoidAuthInquiryResponse'
+              example:
+                id: "c170bfe5-264d-462b-b2bd-688131db451c"
+                serviceType: "VOID_AUTH"
+                customerInfo:
+                  paymentMethod:
+                    type: "ECA"
+                merchantInfo:
+                  merchantCode: "MR101854"
+                  merchantRequestId: "64d6695b-04f8-4d1d-9e5b-88218fef5a42"
+                  merchantOrderId: "146782473"
+                paymentInfo:
+                  amount:
+                    value: 100.00
+                    currency: "AED"
+                  noqodiOrderId: "e3fe411e-0b5b-47c0-9fd5-52419cfc6c8f"
+                  transactionDate: "25-06-2019 10:07:27"
+                statusinfo:
+                  status: "SUCCESS"
+        '404':
+          description: "Transaction Not Found."
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  statusinfo:
+                    $ref: '#/components/schemas/StatusInfoFailure'
+              example:
+                statusinfo:
+                  status: "FAILURE"
+                  errorCode:
+                    code: "TRANSACTION_NOT_FOUND"
+                    message: "Transaction Not Found"
+  /v2/payments/capture:
+    post:
+      operationId: createCapture
+      summary: Capture
+      description: |
+        Make the actual payment and register the corresponding accounting entries.
+
+        ### Request Field Descriptions
+        | Name | Type | Required | Min Length | Max Length | Default Value | Description |
+        | --- | --- | --- | --- | --- | --- | --- |
+        | `serviceType` | String | YES | N/A | N/A | N/A | Type of service - value must be "CAPTURE". |
+        | `customerInfo.paymentMethod.type` | String | YES | N/A | N/A | N/A | Payment method ("ECA" or "CCD") from prior AUTH Response. |
+        | `paymentInfo.amount.currency` | String | YES | 3 | 3 | N/A | Three-letter ISO currency code. |
+        | `paymentInfo.amount.value` | Numeric | YES | N/A | N/A | N/A | The Total Amount for the Transaction. |
+        | `merchantInfo.merchantCode` | String | YES | N/A | N/A | N/A | Merchant Identifier generated by noqodi. |
+        | `merchantInfo.merchantRequestId` | String | YES | N/A | N/A | N/A | Auto generated UUID by the service consumer. |
+        | `merchantInfo.merchantOrderId` | String | YES | N/A | N/A | N/A | Unique String Identifier generated by the service consumer. |
+        | `merchantInfo.merchantLandingURL` | String | YES | N/A | N/A | N/A | Merchant URL to redirect back from noqodi page. |
+        | `paymentInfo.noqodiOrderId` | String | YES | N/A | N/A | N/A | Auto generated UUID by noqodi from AUTH Response. |
+        | `paymentInfo.customerServiceReferenceId`| String | No | N/A | N/A | N/A | Merchant Application Id. |
+        | `paymentInfo.serviceProvided` | Boolean | No | N/A | N/A | `true` | `true` to auto-reconcile, `false` to mark as unreconciled. |
+        | `paymentInfo.serviceTags` | Array of String | No | N/A | N/A | N/A | Tags for merchant reporting. Applied to all transactions unless overridden. |
+        | `paymentInfo.transactions[].transactionAmount.value` | Numeric | YES | N/A | N/A | N/A | The Total Amount for the transaction. |
+        | `paymentInfo.transactions[].transactionAmount.currency` | String | YES | 3 | 3 | N/A | Three-letter ISO currency code. |
+        | `paymentInfo.transactions[].beneficiaries[].beneficiaryAcctNumber` | String | YES | N/A | N/A | N/A | Beneficiary Account Number. |
+        | `paymentInfo.transactions[].beneficiaries[].beneficiaryName` | String | YES | N/A | N/A | N/A | Beneficiary Account Name. |
+        | `paymentInfo.transactions[].beneficiaries[].beneficiaryAmount.value` | Numeric | YES | N/A | N/A | N/A | Total amount to transfer to the beneficiary account. |
+        | `paymentInfo.transactions[].beneficiaries[].beneficiaryAmount.currency` | String | YES | 3 | 3 | N/A | Three-letter ISO currency code. |
+        | `paymentInfo.serviceName` | String | No | N/A | N/A | N/A | Service Name, can be at root or transaction level. |
+        | `paymentInfo.transactions[].customerServiceReferenceId` | String | No | N/A | N/A | N/A | Merchant Application Id for the transaction. |
+        | `paymentInfo.transactions[].serviceName` | String | NO | N/A | N/A | N/A | Service Name for the transaction. |
+        | `paymentInfo.transactions[].serviceProvided` | Boolean | NO | N/A | N/A | N/A | Overrides the root `serviceProvided` flag for the transaction. |
+        | `paymentInfo.transactions[].serviceTags` | Array of String | No | N/A | N/A | N/A | Overrides the root `serviceTags` for the transaction. |
+
+        ### Response Field Descriptions
+        | Name | Type | Min Length | Max Length | Default Value | Description |
+        | --- | --- | --- | --- | --- | --- |
+        | `id` | String | N/A | N/A | N/A | Auto generated UUID by noqodi, used for the CAPTURE inquiry method. |
+        | `paymentInfo.customerReferenceId` | String | N/A | N/A | N/A | Unique reference number for the full request generated by noqodi. |
+        | `paymentInfo.transactionDate` | String | N/A | N/A | N/A | Transaction Date generated by noqodi. Format: "dd-MM-yyyy HH:mm:ss". |
+        | `paymentInfo.transactions[].noqodiReferenceId` | String | N/A | N/A | N/A | Unique reference number per transaction generated by noqodi. |
+      tags:
+        - Payments
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CaptureRequest'
+            example:
+              serviceType: "CAPTURE"
+              merchantInfo:
+                merchantCode: "MR101854"
+                merchantRequestId: "3b357727-7d1e-4a6e-8040-97514f4bef1c"
+                merchantOrderId: "2016241550"
+              paymentInfo:
+                amount:
+                  value: 100.0
+                  currency: "AED"
+                serviceName: "DEFAULT"
+                customerServiceReferenceId: "applicationId1"
+                noqodiOrderId: "3a062184-9f11-46a5-9bcb-feaf0e5896aa"
+                transactions:
+                  - merchantReferenceId: "1917210677"
+                    merchantCode: "MR101854"
+                    serviceName: "DEFAULT"
+                    serviceProvided: true
+                    customerServiceReferenceId: "applicationId1"
+                    serviceTags: ["Entry Permit", "Work"]
+                    transactionAmount:
+                      value: 100.0
+                      currency: "AED"
+                    beneficiaries:
+                      - beneficiaryAcctNumber: "9910185400503"
+                        beneficiaryName: "Violet"
+                        beneficiaryAmount:
+                          value: 60
+                          currency: "AED"
+                      - beneficiaryAcctNumber: "9910185400504"
+                        beneficiaryName: "DubaiStore Commission VAT"
+                        beneficiaryAmount:
+                          value: 40
+                          currency: "AED"
+      responses:
+        '200':
+          description: "Successful capture response."
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CaptureResponse'
+              example:
+                id: "226878ad-be43-401d-bbbe-b706b795d20d"
+                serviceType: "CAPTURE"
+                customerInfo:
+                  paymentMethod:
+                    type: "ECA"
+                merchantInfo:
+                  merchantCode: "MR101854"
+                  merchantRequestId: "3b357727-7d1e-4a6e-8040-97514f4bef1c"
+                  merchantOrderId: "2016241550"
+                paymentInfo:
+                  amount:
+                    value: 100.00
+                    currency: "AED"
+                  serviceName: "DEFAULT"
+                  serviceProvided: true
+                  customerServiceReferenceId: "applicationId1"
+                  serviceTags: ["Entry Permit", "Work"]
+                  noqodiOrderId: "3a062184-9f11-46a5-9bcb-feaf0e5896aa"
+                  customerReferenceId: "D1POP1561442854842"
+                  transactionDate: "25-06-2019 10:07:35"
+                  transactions:
+                    - merchantReferenceId: "1917210677"
+                      noqodiReferenceId: "D1PUC1561442855326"
+                      merchantCode: "MR101854"
+                      serviceName: "DEFAULT"
+                      transactionAmount:
+                        value: 100.00
+                        currency: "AED"
+                      beneficiaries:
+                        - beneficiaryAcctNumber: "9910185400503"
+                          beneficiaryName: "Violet"
+                          beneficiaryAmount:
+                            value: 60.00
+                            currency: "AED"
+                        - beneficiaryAcctNumber: "9910185400504"
+                          beneficiaryName: "DubaiStore Commission VAT"
+                          beneficiaryAmount:
+                            value: 40.00
+                            currency: "AED"
+                statusinfo:
+                  status: "SUCCESS"
+        '404':
+          description: "Transaction Not Found."
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  statusinfo:
+                    $ref: '#/components/schemas/StatusInfoFailure'
+              example:
+                statusinfo:
+                  status: "FAILURE"
+                  errorCode:
+                    code: "TRANSACTION_NOT_FOUND"
+                    message: "Transaction Not Found"
+  /v2/payments/capture/{noqodiResponseId}:
+    get:
+      operationId: getCaptureInquiry
+      summary: Capture Inquiry
+      description: |
+        Get the capture payment details using the noqodi response unique identifier.
+
+        ### Request Field Descriptions
+        | Name | Type | Required | Min Length | Max Length | Default Value | Description |
+        | --- | --- | --- | --- | --- | --- | --- |
+        | `noqodiResponseId` (in path) | String | YES | N/A | N/A | N/A | noqodi response unique identifier. |
+
+        ### Response Field Descriptions
+        | Name | Type | Min Length | Max Length | Default Value | Description |
+        | --- | --- | --- | --- | --- | --- |
+        | `id` | String | N/A | N/A | N/A | Same as the `noqodiResponseId` in the request. |
+        | `serviceType` | String | N/A | N/A | N/A | Type of service - value will always be "CAPTURE". |
+        | `customerInfo.paymentMethod.type` | String | N/A | N/A | N/A | The payment method ("ECA" or "CCD") from the prior AUTH Response. |
+        | `paymentInfo.amount.value` | Numeric | N/A | N/A | N/A | The Total Amount for the Transaction. |
+        | `paymentInfo.amount.currency` | String | 3 | 3 | N/A | Three-letter ISO currency code. |
+        | `merchantInfo.merchantCode` | String | N/A | N/A | N/A | Merchant Identifier generated by noqodi. |
+        | `merchantInfo.merchantRequestId` | String | N/A | N/A | N/A | Auto generated UUID by the service consumer. |
+        | `paymentInfo.noqodiOrderId` | String | N/A | N/A | N/A | Auto generated UUID by noqodi from AUTH Response. |
+        | `paymentInfo.transactionDate` | String | N/A | N/A | N/A | Transaction Date generated by noqodi. Format: "dd-MM-yyyy HH:mm:ss". |
+        | `paymentInfo.transactions[].noqodiReferenceId` | String | N/A | N/A | N/A | Unique reference number per transaction generated by noqodi. |
+        | `paymentInfo.transactions[].transactionAmount.value` | Numeric | N/A | N/A | N/A | The Total Amount for the Transaction. |
+        | `paymentInfo.transactions[].transactionAmount.currency` | String | 3 | 3 | N/A | Three-letter ISO currency code. |
+        | `paymentInfo.transactions[].beneficiaries[].beneficiaryAcctNumber` | String | N/A | N/A | N/A | Beneficiary Account Number. |
+        | `paymentInfo.transactions[].beneficiaries[].beneficiaryName` | String | N/A | N/A | N/A | Beneficiary Account Name. |
+        | `paymentInfo.transactions[].beneficiaries[].beneficiaryAmount.value`| Numeric | N/A | N/A | N/A | Total amount to transfer to the beneficiary account. |
+        | `paymentInfo.transactions[].beneficiaries[].beneficiaryAmount.currency`| String | 3 | 3 | N/A | Three-letter ISO currency code. |
+      tags:
+        - Payments
+      parameters:
+        - name: noqodiResponseId
+          in: path
+          required: true
+          description: "The unique identifier from a previous noqodi response."
+          schema:
+            type: string
+            example: "30b9c7ce-bd40-4774-b9d6-e65b6aa25b9c"
+      responses:
+        '200':
+          description: "Successful retrieval of capture details."
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CaptureResponse'
+              example:
+                id: "30b9c7ce-bd40-4774-b9d6-e65b6aa25b9c"
+                serviceType: "CAPTURE"
+                customerInfo:
+                  paymentMethod:
+                    type: "ECA"
+                merchantInfo:
+                  merchantCode: "MR101854"
+                  merchantRequestId: "8a331974-e6ce-40d3-b19d-64b60d0e21dd"
+                  merchantOrderId: "2147041267"
+                paymentInfo:
+                  amount:
+                    value: 100.00
+                    currency: "AED"
+                  noqodiOrderId: "1d7df654-2c28-4f24-a888-c2e099d215e2"
+                  customerReferenceId: "D1PVI1561442872043"
+                  transactionDate: "25-06-2019 10:07:52"
+                  transactions:
+                    - merchantReferenceId: "1979264209"
+                      noqodiReferenceId: "D1PDL1561442872556"
+                      merchantCode: "MR101854"
+                      serviceName: "DEFAULT"
+                      customerServiceReferenceId: "applicationId1"
+                      serviceProvided: true
+                      serviceTags: ["Entry Permit", "Work"]
+                      transactionAmount:
+                        value: 100.00
+                        currency: "AED"
+                      beneficiaries:
+                        - beneficiaryAcctNumber: "9910185400503"
+                          beneficiaryName: "Violet"
+                          beneficiaryAmount:
+                            value: 60.00
+                            currency: "AED"
+                        - beneficiaryAcctNumber: "9910185400504"
+                          beneficiaryName: "DubaiStore Commission VAT"
+                          beneficiaryAmount:
+                            value: 40.00
+                            currency: "AED"
+                statusinfo:
+                  status: "SUCCESS"
+        '404':
+          description: "Transaction Not Found."
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  statusinfo:
+                    $ref: '#/components/schemas/StatusInfoFailure'
+              example:
+                statusinfo:
+                  status: "FAILURE"
+                  errorCode:
+                    code: "TRANSACTION_NOT_FOUND"
+                    message: "Transaction Not Found"
+  /v2/payments/complete:
+    post:
+      operationId: createCompletePay
+      summary: Complete Pay
+      description: |
+        Use this API for checking the status or completing a Failed Auth, Void Auth, or Capture transaction.
+
+        ### Request Field Descriptions
+        | Name | Type | Required | Min Length | Max Length | Default Value | Description |
+        | --- | --- | --- | --- | --- | --- | --- |
+        | `serviceType` | String | YES | N/A | N/A | N/A | Type of service - must be one of: `AUTH`, `VOID_AUTH`, `CAPTURE`. |
+        | `merchantInfo.merchantCode` | String | YES | N/A | N/A | N/A | Merchant Identifier generated by noqodi. |
+        | `merchantInfo.merchantRequestId` | String | YES | N/A | N/A | N/A | Auto generated UUID by the service consumer. |
+        | `merchantInfo.merchantOrderId` | String | YES | N/A | N/A | N/A | Unique String Identifier generated by the service consumer. |
+
+        ### Response Field Descriptions
+        The response fields will match the corresponding operation being completed (`AUTH`, `VOID_AUTH`, or `CAPTURE`).
+      tags:
+        - Payments
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - serviceType
+                - merchantInfo
+              properties:
+                serviceType:
+                  type: string
+                  description: "The type of service to complete."
+                  enum: [AUTH, VOID_AUTH, CAPTURE]
+                  example: CAPTURE
+                merchantInfo:
+                  $ref: '#/components/schemas/MerchantInfo'
+            example:
+              serviceType: "CAPTURE"
+              merchantInfo:
+                merchantCode: "MR101854"
+                merchantRequestId: "2e34595c-3072-44ee-b18d-39ad44bbc3d1"
+                merchantOrderId: "1221385222"
+      responses:
+        '200':
+          description: "The response will correspond to the successful response data of the `serviceType` requested (e.g., a normal CAPTURE response)."
+        '400':
+          description: "The response will correspond to the failure response data of the `serviceType` requested."
+  /v2/refunds:
+    post:
+      operationId: createRefund
+      summary: Refund
+      description: |
+        Initiate a refund request for a captured amount. This has variants for ECA, CCD, and BKT (Bank Transfer) refunds.
+
+        ### Request Field Descriptions
+        | Name | Type | Required | Min Length | Max Length | Default Value | Description |
+        | --- | --- | --- | --- | --- | --- | --- |
+        | `serviceType` | String | YES | N/A | N/A | N/A | Type of service - value must be "REFUND". |
+        | `customerInfo.paymentMethod.type`| String | YES | N/A | N/A | N/A | Payment method: "ECA", "CCD", or "BKT". |
+        | `customerInfo.walletId` | String | NO | N/A | N/A | N/A | Required if payment method is "ECA" and refund is to a different wallet. |
+        | `customerInfo.bankDetail.*` | various | NO | N/A | N/A | N/A | Bank details are required if payment method is "BKT". Includes beneficiaryName, bankName, bankCountry, IBAN, etc. |
+        | `paymentInfo.amount.value` | Numeric | YES | N/A | N/A | N/A | The Total Amount for the Transaction. |
+        | `paymentInfo.amount.currency` | String | YES | 3 | 3 | N/A | Three-letter ISO currency code. |
+        | `merchantInfo.merchantCode` | String | YES | N/A | N/A | N/A | Merchant Identifier generated by noqodi. |
+        | `merchantInfo.merchantRequestId` | String | YES | N/A | N/A | N/A | Auto generated UUID by the service consumer. |
+        | `merchantInfo.merchantOrderId` | String | YES | N/A | N/A | N/A | Unique String Identifier generated by the service consumer. |
+        | `paymentInfo.noqodiOrderId` | String | YES | N/A | N/A | N/A | Auto generated UUID by noqodi from AUTH Response. Can be blank for pre-migration v1 payments. |
+        | `paymentInfo.transactions[].merchantCode` | String | YES | N/A | N/A | N/A | Merchant Code for the requested transaction. |
+        | `paymentInfo.transactions[].noqodiReferenceId`| String | YES | N/A | N/A | N/A | Unique reference number per transaction generated by noqodi. |
+        | `paymentInfo.transactions[].transactionAmount.value` | Numeric | YES | N/A | N/A | N/A | The Total Amount for the Transaction. |
+        | `paymentInfo.transactions[].transactionAmount.currency` | String | YES | 3 | 3 | N/A | Three-letter ISO currency code. |
+        | `paymentInfo.transactions[].beneficiaries[].beneficiaryAcctNumber` | String | YES | N/A | N/A | N/A | Beneficiary Account Number for the Transaction. |
+        | `paymentInfo.transactions[].beneficiaries[].beneficiaryName` | String | YES | N/A | N/A | N/A | Beneficiary Name for the Transaction. |
+        | `paymentInfo.transactions[].beneficiaries[].beneficiaryAmount.value` | Numeric | YES | N/A | N/A | N/A | Total amount to transfer to the beneficiary account. |
+        | `paymentInfo.transactions[].beneficiaries[].beneficiaryAmount.currency` | String | YES | 3 | 3 | N/A | Three-letter ISO currency code. |
+        | `paymentInfo.metaData.adjustment` | String | No | N/A | N/A | N/A | "YES" for Application Refund, "NO" for Warranty refund. |
+
+        ### Response Field Descriptions
+        | Name | Type | Min Length | Max Length | Default Value | Description |
+        | --- | --- | --- | --- | --- | --- |
+        | `id` | String | N/A | N/A | N/A | Auto generated UUID by noqodi, used for the REFUND Inquiry method. |
+        | `customerInfo.walletId` | String | N/A | N/A | N/A | Wallet ID to which the refund amount will be credited. |
+        | `paymentInfo.transactionDate` | String | N/A | N/A | N/A | Transaction Date generated by noqodi. Format: "dd-MM-yyyy HH:mm:ss". |
+        | `paymentInfo.transactions[].refundReason` | String | N/A | N/A | N/A | Possible values: `PARTIAL_BUSINESS`, `FULL_BUSINESS`, `TECHNICAL`. |
+        | `paymentInfo.transactions[].noqodiRefundReferenceId` | String | N/A | N/A | N/A | Auto generated UUID by noqodi (unique for each refund transaction). |
+      tags:
+        - Refunds
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/RefundRequest'
+            examples:
+              bankTransferRefund:
+                summary: "Bank Transfer (BKT) Refund Example"
+                value:
+                  serviceType: "REFUND"
+                  customerInfo:
+                    paymentMethod:
+                      type: "BKT"
+                    bankDetail:
+                      beneficiaryName: "John Smith"
+                      bankName: "TEST BANK"
+                      bankCountry: "UAE"
+                      beneficiaryIBANNumber: "AE101010101010101010101"
+                      beneficiaryAccountNumber: "1010101010101"
+                      swiftCode: "TESTSWIFTCODE"
+                  merchantInfo:
+                    merchantCode: "MR101854"
+                    merchantRequestId: "86ec2b24-8790-4ce0-83d9-ccca542c215e"
+                    merchantOrderId: "937039287"
+                  paymentInfo:
+                    amount:
+                      value: 50.00
+                      currency: "AED"
+                    metaData:
+                      adjustment: "YES"
+                    noqodiOrderId: "8ae3f2a1-cb3f-4ba8-9f44-803ff83f77e0"
+                    transactions:
+                      - merchantReferenceId: "2124051472"
+                        noqodiReferenceId: "D1PKV1561442880845"
+                        merchantCode: "MR101854"
+                        refundReason: "PARTIAL_BUSINESS"
+                        transactionAmount:
+                          value: 50.00
+                          currency: "AED"
+                        beneficiaries:
+                          - beneficiaryAcctNumber: "9910185400503"
+                            beneficiaryName: "Violet"
+                            beneficiaryAmount:
+                              value: 30.00
+                              currency: "AED"
+                          - beneficiaryAcctNumber: "9910185400504"
+                            beneficiaryName: "DubaiStore Commission VAT"
+                            beneficiaryAmount:
+                              value: 20.00
+                              currency: "AED"
+      responses:
+        '200':
+          description: "Successful refund response."
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RefundResponse'
+              example:
+                id: "9f916c37-7a56-4aba-877b-9cc71f8beb6a"
+                serviceType: "REFUND"
+                customerInfo:
+                  paymentMethod:
+                    type: "BKT"
+                  bankDetail:
+                    beneficiaryName: "John Smith"
+                    bankName: "TEST BANK"
+                    bankCountry: "UAE"
+                    beneficiaryIBANNumber: "AE101010101010101010101"
+                    beneficiaryAccountNumber: "1010101010101"
+                    swiftCode: "TESTSWIFTCODE"
+                merchantInfo:
+                  merchantCode: "MR101854"
+                  merchantRequestId: "86ec2b24-8790-4ce0-83d9-ccca542c215e"
+                  merchantOrderId: "937039287"
+                paymentInfo:
+                  amount:
+                    value: 50.00
+                    currency: "AED"
+                  metaData:
+                    adjustment: "YES"
+                  noqodiOrderId: "8ae3f2a1-cb3f-4ba8-9f44-803ff83f77e0"
+                  customerReferenceId: "D1RAZ1561442887344"
+                  transactionDate: "25-06-2019 10:08:07"
+                  transactions:
+                    - merchantReferenceId: "2124051472"
+                      noqodiReferenceId: "D1PKV1561442880845"
+                      noqodiRefundReferenceId: "D1RET1561442887605"
+                      merchantCode: "MR101854"
+                      transactionAmount:
+                        value: 50.00
+                        currency: "AED"
+                      beneficiaries:
+                        - beneficiaryAcctNumber: "9910185400503"
+                          beneficiaryName: "Violet"
+                          beneficiaryAmount:
+                            value: 30.00
+                            currency: "AED"
+                        - beneficiaryAcctNumber: "9910185400504"
+                          beneficiaryName: "DubaiStore Commission VAT"
+                          beneficiaryAmount:
+                            value: 20.00
+                            currency: "AED"
+                statusinfo:
+                  status: "SUCCESS"
+        '400':
+          description: "Failure refund response."
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  statusinfo:
+                    $ref: '#/components/schemas/StatusInfoFailure'
+              example:
+                statusinfo:
+                  status: "FAILURE"
+                  errorCode:
+                    code: "TRANSACTION_ALREADY_INITIATED"
+                    message: "Please provide unique Merchant Transaction No., Refund Transaction Found For Noqodi Auth Id - xxx and Merchant Transaction No. - xxx and MerchatCode - xxx"
+  /v2/refunds/complete:
+    post:
+      operationId: createCompleteRefund
+      summary: Complete Refund
+      description: |
+        Inquire about a refund request status and attempt to complete it if not previously completed. The request and response fields are the same as the main Refund operation.
+      tags:
+        - Refunds
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - serviceType
+                - merchantInfo
+              properties:
+                serviceType:
+                  type: string
+                  enum: [REFUND]
+                  default: "REFUND"
+                merchantInfo:
+                  $ref: '#/components/schemas/MerchantInfo'
+            example:
+              serviceType: "REFUND"
+              merchantInfo:
+                merchantCode: "MR101854"
+                merchantRequestId: "2948a4fe-99f3-48d7-b3fe-3c53291ebf21"
+                merchantOrderId: "1762621234"
+      responses:
+        '200':
+          description: "Successful complete refund response."
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RefundResponse'
+              example:
+                id: "96e3e1a4-39c1-45db-99df-c2be69dd9428"
+                serviceType: "REFUND"
+                customerInfo:
+                  paymentMethod:
+                    type: "ECA"
+                merchantInfo:
+                  merchantCode: "MR101854"
+                  merchantRequestId: "2948a4fe-99f3-48d7-b3fe-3c53291ebf21"
+                  merchantOrderId: "1762621234"
+                paymentInfo:
+                  amount:
+                    value: 100.00
+                    currency: "AED"
+                  noqodiOrderId: "e2dca148-fe64-4afb-a3c4-2bc23625c968"
+                  customerReferenceId: "D1RJB1561442938305"
+                  transactionDate: "25-06-2019 10:08:58"
+                  transactions:
+                    - merchantReferenceId: "158431043"
+                      noqodiReferenceId: "D1PWD1561442931364"
+                      noqodiRefundReferenceId: "D1RUQ1561442938546"
+                      merchantCode: "MR101854"
+                      transactionAmount:
+                        value: 100.00
+                        currency: "AED"
+                      beneficiaries:
+                        - beneficiaryAcctNumber: "9910185400503"
+                          beneficiaryName: "Violet"
+                          beneficiaryAmount:
+                            value: 60.00
+                            currency: "AED"
+                        - beneficiaryAcctNumber: "9910185400504"
+                          beneficiaryName: "DubaiStore Commission VAT"
+                          beneficiaryAmount:
+                            value: 40.00
+                            currency: "AED"
+                statusinfo:
+                  status: "SUCCESS"
+        '500':
+          description: "System Error."
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  statusinfo:
+                    $ref: '#/components/schemas/StatusInfoFailure'
+              example:
+                statusinfo:
+                  status: "FAILURE"
+                  errorCode:
+                    code: "SYSTEM_ERROR"
+                    message: "System Error, Please contact noqodi"
+  /v2/refunds/{noqodiResponseId}:
+    get:
+      operationId: getRefundInquiry
+      summary: Refund Inquiry
+      description: |
+        Get Refund details using the noqodi response unique identifier.
+
+        ### Request Field Descriptions
+        | Name | Type | Required | Min Length | Max Length | Default Value | Description |
+        | --- | --- | --- | --- | --- | --- | --- |
+        | `noqodiResponseId` (in path) | String | YES | N/A | N/A | N/A | noqodi response unique identifier. |
+
+        ### Response Field Descriptions
+        | Name | Type | Min Length | Max Length | Default Value | Description |
+        | --- | --- | --- | --- | --- | --- |
+        | `id` | String | N/A | N/A | N/A | Same as the `noqodiResponseId` in the request. |
+        | `serviceType` | String | N/A | N/A | N/A | Type of service - value must be "REFUND". |
+        | `customerInfo.paymentMethod.type` | String | N/A | N/A | N/A | The payment method ("ECA" or "CCD") from the prior REFUND Response. |
+        | `paymentInfo.amount.value` | Numeric | N/A | N/A | N/A | The Total Amount for the Transaction. |
+        | `paymentInfo.amount.currency` | String | 3 | 3 | N/A | Three-letter ISO currency code. |
+        | `merchantInfo.merchantCode` | String | N/A | N/A | N/A | Merchant Identifier generated by noqodi. |
+        | `merchantInfo.merchantRequestId` | String | N/A | N/A | N/A | Auto generated UUID by the service consumer. |
+        | `merchantInfo.merchantOrderId` | String | N/A | N/A | N/A | Unique String Identifier generated by the service consumer. |
+        | `paymentInfo.noqodiOrderId` | String | N/A | N/A | N/A | Auto generated UUID by noqodi from AUTH Response. |
+        | `paymentInfo.transactionDate` | String | N/A | N/A | N/A | Transaction Date generated by noqodi. Format: "dd-MM-yyyy HH:mm:ss". |
+        | `paymentInfo.transactions[].merchantCode` | String | N/A | N/A | N/A | Merchant Code for the requested transaction. |
+        | `paymentInfo.transactions[].noqodiReferenceId` | String | N/A | N/A | N/A | Unique reference number per transaction generated by noqodi. |
+        | `paymentInfo.transactions[].transactionAmount.value` | Numeric | N/A | N/A | N/A | The Total Amount for the Transaction. |
+        | `paymentInfo.transactions[].transactionAmount.currency` | String | 3 | 3 | N/A | Three-letter ISO currency code. |
+        | `paymentInfo.transactions[].beneficiaries[].beneficiaryAcctNumber` | String | N/A | N/A | N/A | Beneficiary Account Number for the Transaction. |
+        | `paymentInfo.transactions[].beneficiaries[].beneficiaryName` | String | N/A | N/A | N/A | Beneficiary Name for the Transaction. |
+        | `paymentInfo.transactions[].beneficiaries[].beneficiaryAmount.value` | Numeric | N/A | N/A | N/A | Total amount to transfer to the beneficiary account. |
+        | `paymentInfo.transactions[].beneficiaries[].beneficiaryAmount.currency` | String | 3 | 3 | N/A | Three-letter ISO currency code. |
+        | `customerInfo.customerId` | String | N/A | N/A | N/A | Customer Identifier generated by noqodi. |
+        | `paymentInfo.transactions[].noqodiRefundReferenceId` | String | N/A | N/A | N/A | Auto generated UUID by noqodi (unique for each refund transaction). |
+        | `paymentInfo.transactions[].releaseFundStatus.releaseFunds.*` | various | N/A | N/A | N/A | For BKT refunds only, includes status codes, descriptions, and amounts. |
+      tags:
+        - Refunds
+      parameters:
+        - name: noqodiResponseId
+          in: path
+          required: true
+          description: "The unique identifier from a previous noqodi response."
+          schema:
+            type: string
+            example: "1af8607c-0158-4580-9606-510a3f3a5a3e"
+      responses:
+        '200':
+          description: "Successful retrieval of refund details."
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RefundInquiryResponse'
+              example:
+                id: "1af8607c-0158-4580-9606-510a3f3a5a3e"
+                serviceType: "REFUND"
+                customerInfo:
+                  walletId: "DW100029"
+                  paymentMethod:
+                    type: "ECA"
+                merchantInfo:
+                  merchantCode: "MR101854"
+                  merchantRequestId: "de5be58f-a216-4d87-970e-2ffa317d1ae2"
+                  merchantOrderId: "1759395174"
+                paymentInfo:
+                  amount:
+                    value: 100.00
+                    currency: "AED"
+                  noqodiOrderId: "a3e4524b-06c6-430b-acc1-7438aef9b21d"
+                  customerReferenceId: "D1RSL1561442923362"
+                  transactionDate: "25-06-2019 10:08:43"
+                  transactions:
+                    - merchantReferenceId: "484481448"
+                      noqodiReferenceId: "D1PPO1561442916916"
+                      noqodiRefundReferenceId: "D1RMK1561442923592"
+                      merchantCode: "MR101854"
+                      transactionAmount:
+                        value: 100.00
+                        currency: "AED"
+                      beneficiaries:
+                        - beneficiaryAcctNumber: "9910185400503"
+                          beneficiaryName: "Violet"
+                          beneficiaryAmount:
+                            value: 60.00
+                            currency: "AED"
+                        - beneficiaryAcctNumber: "9910185400504"
+                          beneficiaryName: "DubaiStore Commission VAT"
+                          beneficiaryAmount:
+                            value: 40.00
+                            currency: "AED"
+                statusinfo:
+                  status: "SUCCESS"
+        '500':
+          description: "System Error."
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  statusinfo:
+                    $ref: '#/components/schemas/StatusInfoFailure'
+              example:
+                statusinfo:
+                  status: "FAILURE"
+                  errorCode:
+                    code: "SYSTEM_ERROR"
+                    message: "System Error, Please contact noqodi"
+components:
+  securitySchemes:
+    oAuth2ClientCredentials:
+      type: oauth2
+      description: "Authentication using the OAuth 2.0 Client Credentials flow to obtain an access token."
+      flows:
+        clientCredentials:
+          tokenUrl: /oauth/token/client-credentials
+          scopes:
+            payouts: Scope for payout operations
+            balances: Scope for balance operations
+            payments: Scope for payment operations
+            refunds: Scope for refund operations
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+      description: "Bearer Token (Access Token) obtained from the OAuth 2.0 Client Credentials flow."
+  schemas:
+    # COMMON SCHEMAS
+    StatusInfoSuccess:
+      type: object
+      properties:
+        status:
+          type: string
+          description: "The status of the request."
+          example: "SUCCESS"
+    StatusInfoFailure:
+      type: object
+      properties:
+        status:
+          type: string
+          description: "The status of the request."
+          example: "FAILURE"
+        error:
+          type: object
+          properties:
+            code:
+              type: string
+              description: "The error code for the failed request."
+            message:
+              type: string
+              description: "A descriptive message for the error."
+            traceId:
+              type: string
+              description: "A unique identifier for tracing the request."
+              example: "1cc15a9dd144da"
+    MerchantInfo:
+      type: object
+      required:
+        - merchantCode
+        - merchantRequestId
+        - merchantOrderId
+      properties:
+        merchantCode:
+          type: string
+          description: "Merchant Identifier generated by noqodi at the time of merchant creation."
+          example: "MR116589"
+        merchantRequestId:
+          type: string
+          format: uuid
+          description: "Auto-generated UUID by the service consumer, unique for each transaction in the payment cycle."
+          example: "3b357727-7d1e-26e-8140-97514f2bef2c"
+        merchantOrderId:
+          type: string
+          description: "Unique String Identifier generated by the service consumer, generated once for the entire payment cycle."
+          example: "2345831268305"
+        merchantLandingURL:
+          type: string
+          format: uri
+          description: "Optional Merchant URL to redirect back to from the noqodi page."
+          example: "https://www.test.com"
+    Amount:
+      type: object
+      required:
+        - value
+        - currency
+      properties:
+        value:
+          type: number
+          format: double
+          description: "The total amount for the transaction."
+          example: 100.00
+        currency:
+          type: string
+          description: "Three-letter ISO currency code."
+          minLength: 3
+          maxLength: 3
+          example: "AED"
+    Beneficiary:
+      type: object
+      required:
+        - beneficiaryAcctNumber
+        - beneficiaryName
+        - beneficiaryAmount
+      properties:
+        beneficiaryAcctNumber:
+          type: string
+          description: "Beneficiary Account Number."
+          example: "9910185400503"
+        beneficiaryName:
+          type: string
+          description: "Beneficiary Account Name."
+          example: "Violet"
+        beneficiaryAmount:
+          $ref: '#/components/schemas/Amount'
+
+    # PRE-AUTH SCHEMAS
+    PreAuthRequest:
+      type: object
+      required:
+        - serviceType
+        - serviceMode
+        - merchantCode
+        - paymentLinksinfo
+      properties:
+        serviceType:
+          type: string
+          description: "Type of service - and its value must be 'PRE_AUTH'."
+          enum: [PRE_AUTH]
+        serviceMode:
+          type: string
+          description: "Mode of service - which must be NORMAL for standard payment."
+          enum: [NORMAL]
+        source:
+          type: string
+          example: "UAEPAY"
+        merchantCode:
+          type: string
+          description: "Merchant Identifier generated by noqodi."
+          example: "MR116589"
+        paymentInitiator:
+          type: object
+          properties:
+            name:
+              type: string
+              example: "Shajahan"
+            email:
+              type: string
+              format: email
+              example: "sdssdd@sdds.sd"
+            mobileNumber:
+              type: string
+              example: "534343323"
+            emiratesid:
+              type: string
+              example: "3434434334"
+        paymentLinksinfo:
+          type: array
+          items:
+            type: object
+            properties:
+              merchantLandingURL:
+                type: string
+                format: uri
+                example: "https://www.test.com"
+              merchantRequestId:
+                type: string
+                format: uuid
+                example: "82c6b2b0-dc22-4e15-92b9-508c44410336"
+              merchantOrderId:
+                type: string
+                example: "703203e9-f2c9-4376-9ed6-de7f39b56853"
+              amount:
+                type: number
+                example: 100
+              paymentRemarks:
+                type: string
+                example: "Medical + Visa Fees"
+              serviceProvided:
+                type: string
+                example: "true"
+              autoReconciled:
+                type: boolean
+                example: false
+              metaData:
+                type: object
+                additionalProperties: true
+                example:
+                  key: "value can be string integer json object or array"
+                  key1: 12345
+                  name: "John Smith"
+                  phone: 520000000
+              bnplPaymentInfo:
+                type: object
+                properties:
+                  buyerRequestData:
+                    type: object
+                  shippingAddressRequestData:
+                    type: object
+                  orderRequestData:
+                    type: object
+                  buyerHistoryRequestData:
+                    type: object
+    PreAuthResponse:
+      type: object
+      properties:
+        serviceType:
+          type: string
+          example: "PRE_AUTH"
+        serviceMode:
+          type: string
+          example: "NORMAL"
+        merchantCode:
+          type: string
+          example: "MR116589"
+        paymentLinksInfo:
+          type: array
+          items:
+            type: object
+            properties:
+              merchantRequestId:
+                type: string
+                format: uuid
+                example: "b85494e4-afae-4621-9385-51658f57d43b"
+              merchantOrderId:
+                type: string
+                example: "aab8d238-e078-4d9c-9bce-5a3f497dafe6"
+              paymentUrl:
+                type: string
+                format: uri
+                description: "The URL to redirect the user to for payment."
+                example: "https://pay-dev02.noqodi.com/noqodi-payment?paymentRequestToken=950fc501-7bd1-416d-ae85-e0049a14dd78&hosted=true"
+              paymentRequestToken:
+                type: string
+                format: uuid
+                description: "Payment Request Token generated by noqodi."
+                example: "950fc501-7bd1-416d-ae85-e0049a14dd78"
+              error:
+                type: object
+                properties:
+                  code:
+                    type: string
+                  message:
+                    type: string
+                  traceId:
+                    type: string
+        statusinfo:
+          oneOf:
+            - $ref: '#/components/schemas/StatusInfoSuccess'
+            - $ref: '#/components/schemas/StatusInfoFailure'
+
+    # AUTH INQUIRY SCHEMAS
+    AuthInquiryResponse:
+      type: object
+      properties:
+        id:
+          type: string
+          description: "Same as the noqodiResponseId in the request."
+        serviceType:
+          type: string
+          description: "Type of service - and its value will always be 'AUTH'."
+          enum: [AUTH]
+        serviceMode:
+          type: string
+          description: "Mode of service."
+          enum: [NORMAL, XPRESS, DIRECT]
+        customerInfo:
+          type: object
+          properties:
+            paymentMethod:
+              type: object
+              properties:
+                type:
+                  type: string
+                  description: "The payment method, either 'ECA' or 'CCD'."
+                  enum: [ECA, CCD]
+                creditCardInfo:
+                  type: object
+        merchantInfo:
+          $ref: '#/components/schemas/MerchantInfo'
+        paymentInfo:
+          type: object
+          properties:
+            amount:
+              $ref: '#/components/schemas/Amount'
+            noqodiOrderId:
+              type: string
+              format: uuid
+              description: "Auto generated UUID by noqodi, referenced in subsequent transactions."
+              example: "eb9e8579-dcc5-44f4-b109-fa2001953fd1"
+            cardRRN:
+              type: string
+              example: "932907309360"
+            cardAuthCode:
+              type: string
+              example: "309360"
+            cardMaskNumber:
+              type: string
+              example: "512345xxxxxx2346"
+            customerReferenceId:
+              type: string
+              example: "D2PXQ1574666215037"
+            preAuthToken:
+              type: string
+              format: uuid
+              example: "67b63457-ee17-4d0b-88a5-916c1c68d5d7"
+            transactionDate:
+              type: string
+              description: "Transaction Date generated by noqodi. Format: 'dd-MM-yyyy HH:mm:ss'"
+              example: "25-11-2019 11:16:55"
+        statusinfo:
+          $ref: '#/components/schemas/StatusInfoSuccess'
+
+    # VOID AUTH SCHEMAS
+    VoidAuthRequest:
+      type: object
+      required:
+        - serviceType
+        - merchantInfo
+        - paymentInfo
+      properties:
+        serviceType:
+          type: string
+          description: "Type of service - and its value must be 'VOID_AUTH'."
+          enum: [VOID_AUTH]
+        merchantInfo:
+          $ref: '#/components/schemas/MerchantInfo'
+        paymentInfo:
+          type: object
+          required:
+            - noqodiOrderId
+          properties:
+            noqodiOrderId:
+              type: string
+              format: uuid
+              description: "Auto generated UUID by noqodi from AUTH Response."
+              example: "2a8794ab-c423-492a-a5ce-bf78bf24a4cb"
+    VoidAuthResponse:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+          description: "Auto generated UUID by noqodi, used for VOID AUTH Inquiry."
+          example: "fe8454f1-48dd-4b2e-bb1b-a48f15022ee8"
+        serviceType:
+          type: string
+          enum: [VOID_AUTH]
+        serviceMode:
+          type: string
+          enum: [NORMAL]
+        customerInfo:
+          type: object
+          properties:
+            userId:
+              type: string
+              example: "anutest"
+            paymentMethod:
+              type: object
+              properties:
+                type:
+                  type: string
+                  description: "Payment method from prior AUTH Response."
+                  enum: [ECA, CCD]
+        merchantInfo:
+          $ref: '#/components/schemas/MerchantInfo'
+        paymentInfo:
+          type: object
+          properties:
+            amount:
+              $ref: '#/components/schemas/Amount'
+            noqodiOrderId:
+              type: string
+              format: uuid
+              example: "2a8794ab-c423-492a-a5ce-bf78bf24a4cb"
+            transactionDate:
+              type: string
+              description: "Format: 'dd-MM-yyyy HH:mm:ss'"
+              example: "26-11-2019 15:10:35"
+            transactionCount:
+              type: string
+              example: "2"
+        statusinfo:
+          $ref: '#/components/schemas/StatusInfoSuccess'
+    VoidAuthInquiryResponse:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+          description: "Same as the noqodiResponseId in the request."
+          example: "c170bfe5-264d-462b-b2bd-688131db451c"
+        serviceType:
+          type: string
+          enum: [VOID_AUTH]
+        customerInfo:
+          type: object
+          properties:
+            paymentMethod:
+              type: object
+              properties:
+                type:
+                  type: string
+                  description: "Payment method from prior AUTH Response."
+                  enum: [ECA, CCD]
+        merchantInfo:
+          $ref: '#/components/schemas/MerchantInfo'
+        paymentInfo:
+          type: object
+          properties:
+            amount:
+              $ref: '#/components/schemas/Amount'
+            noqodiOrderId:
+              type: string
+              format: uuid
+              description: "Auto generated UUID by noqodi from AUTH Response."
+              example: "e3fe411e-0b5b-47c0-9fd5-52419cfc6c8f"
+            transactionDate:
+              type: string
+              description: "Format: 'dd-MM-yyyy HH:mm:ss'."
+              example: "25-06-2019 10:07:27"
+        statusinfo:
+          $ref: '#/components/schemas/StatusInfoSuccess'
+
+    # CAPTURE SCHEMAS
+    CaptureRequest:
+      type: object
+      required:
+        - serviceType
+        - merchantInfo
+        - paymentInfo
+      properties:
+        serviceType:
+          type: string
+          description: "Type of service - and its value must be 'CAPTURE'."
+          enum: [CAPTURE]
+        merchantInfo:
+          $ref: '#/components/schemas/MerchantInfo'
+        paymentInfo:
+          type: object
+          required:
+            - amount
+            - noqodiOrderId
+            - transactions
+          properties:
+            amount:
+              $ref: '#/components/schemas/Amount'
+            serviceName:
+              type: string
+              description: "Service Name can be passed at paymentInfo level or inside each transaction."
+              example: "DEFAULT"
+            customerServiceReferenceId:
+              type: string
+              description: "Merchant Application Id."
+              example: "applicationId1"
+            noqodiOrderId:
+              type: string
+              format: uuid
+              description: "Auto generated UUID by noqodi from AUTH Response."
+              example: "3a062184-9f11-46a5-9bcb-feaf0e5896aa"
+            transactions:
+              type: array
+              items:
+                type: object
+                properties:
+                  merchantReferenceId:
+                    type: string
+                    example: "1917210677"
+                  merchantCode:
+                    type: string
+                    example: "MR101854"
+                  serviceName:
+                    type: string
+                    example: "DEFAULT"
+                  serviceProvided:
+                    type: boolean
+                    description: "Flag to indicate if transaction should be auto-reconciled."
+                    default: true
+                  customerServiceReferenceId:
+                    type: string
+                    example: "applicationId1"
+                  serviceTags:
+                    type: array
+                    items:
+                      type: string
+                    description: "Used by merchant to tag transaction for reporting."
+                    example: ["Entry Permit", "Work"]
+                  transactionAmount:
+                    $ref: '#/components/schemas/Amount'
+                  beneficiaries:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/Beneficiary'
+    CaptureResponse:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+          description: "Auto generated UUID by noqodi, used for CAPTURE inquiry."
+          example: "226878ad-be43-401d-bbbe-b706b795d20d"
+        serviceType:
+          type: string
+          enum: [CAPTURE]
+        customerInfo:
+          type: object
+          properties:
+            paymentMethod:
+              type: object
+              properties:
+                type:
+                  type: string
+                  enum: [ECA, CCD]
+        merchantInfo:
+          $ref: '#/components/schemas/MerchantInfo'
+        paymentInfo:
+          type: object
+          properties:
+            amount:
+              $ref: '#/components/schemas/Amount'
+            serviceName:
+              type: string
+            serviceProvided:
+              type: boolean
+            customerServiceReferenceId:
+              type: string
+            serviceTags:
+              type: array
+              items:
+                type: string
+            noqodiOrderId:
+              type: string
+              format: uuid
+            customerReferenceId:
+              type: string
+              description: "Unique reference number for the full request generated by noqodi."
+              example: "D1POP1561442854842"
+            transactionDate:
+              type: string
+              description: "Format: 'dd-MM-yyyy HH:mm:ss'."
+              example: "25-06-2019 10:07:35"
+            transactions:
+              type: array
+              items:
+                type: object
+                properties:
+                  merchantReferenceId:
+                    type: string
+                  noqodiReferenceId:
+                    type: string
+                    description: "Unique reference number per transaction generated by noqodi."
+                    example: "D1PUC1561442855326"
+                  merchantCode:
+                    type: string
+                  serviceName:
+                    type: string
+                  transactionAmount:
+                    $ref: '#/components/schemas/Amount'
+                  beneficiaries:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/Beneficiary'
+        statusinfo:
+          $ref: '#/components/schemas/StatusInfoSuccess'
+
+    # REFUND SCHEMAS
+    RefundRequest:
+      type: object
+      properties:
+        serviceType:
+          type: string
+          description: "Type of service - and its value must be 'REFUND'."
+          enum: [REFUND]
+        customerInfo:
+          type: object
+          properties:
+            paymentMethod:
+              type: object
+              properties:
+                type:
+                  type: string
+                  description: "Payment method type. Can be 'ECA', 'CCD', or 'BKT'."
+                  enum: [ECA, CCD, BKT]
+            bankDetail:
+              type: object
+              description: "Required if payment method type is 'BKT'."
+              properties:
+                beneficiaryName:
+                  type: string
+                bankName:
+                  type: string
+                bankCountry:
+                  type: string
+                beneficiaryIBANNumber:
+                  type: string
+                beneficiaryAccountNumber:
+                  type: string
+                swiftCode:
+                  type: string
+        merchantInfo:
+          $ref: '#/components/schemas/MerchantInfo'
+        paymentInfo:
+          type: object
+          properties:
+            amount:
+              $ref: '#/components/schemas/Amount'
+            metaData:
+              type: object
+              properties:
+                adjustment:
+                  type: string
+                  description: "Required if the refund is an adjustment refund ('YES'/'NO')."
+                  enum: [YES, NO]
+            noqodiOrderId:
+              type: string
+              format: uuid
+              description: "Auto generated UUID by noqodi from AUTH Response."
+            transactions:
+              type: array
+              items:
+                type: object
+                properties:
+                  merchantReferenceId:
+                    type: string
+                  noqodiReferenceId:
+                    type: string
+                    description: "Unique reference number per transaction generated by noqodi."
+                  merchantCode:
+                    type: string
+                  refundReason:
+                    type: string
+                    enum: [PARTIAL_BUSINESS, FULL_BUSINESS, TECHNICAL]
+                  transactionAmount:
+                    $ref: '#/components/schemas/Amount'
+                  beneficiaries:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/Beneficiary'
+    RefundResponse:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+          description: "Auto generated UUID by noqodi, used for REFUND Inquiry."
+        serviceType:
+          type: string
+          enum: [REFUND]
+        customerInfo:
+          type: object
+        merchantInfo:
+          $ref: '#/components/schemas/MerchantInfo'
+        paymentInfo:
+          type: object
+          properties:
+            amount:
+              $ref: '#/components/schemas/Amount'
+            metaData:
+              type: object
+            noqodiOrderId:
+              type: string
+              format: uuid
+            customerReferenceId:
+              type: string
+            transactionDate:
+              type: string
+              description: "Format: 'dd-MM-yyyy HH:mm:ss'."
+            transactions:
+              type: array
+              items:
+                type: object
+                properties:
+                  merchantReferenceId:
+                    type: string
+                  noqodiReferenceId:
+                    type: string
+                  noqodiRefundReferenceId:
+                    type: string
+                    format: uuid
+                    description: "Auto generated UUID by noqodi (unique for each refund transaction)."
+                  merchantCode:
+                    type: string
+                  transactionAmount:
+                    $ref: '#/components/schemas/Amount'
+                  beneficiaries:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/Beneficiary'
+        statusinfo:
+          $ref: '#/components/schemas/StatusInfoSuccess'
+    RefundInquiryResponse:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+          description: "Same as the noqodiResponseId in the request."
+        serviceType:
+          type: string
+          enum: [REFUND]
+        customerInfo:
+          type: object
+          properties:
+            walletId:
+              type: string
+            paymentMethod:
+              type: object
+              properties:
+                type:
+                  type: string
+                  enum: [ECA, CCD]
+        merchantInfo:
+          $ref: '#/components/schemas/MerchantInfo'
+        paymentInfo:
+          type: object
+          properties:
+            amount:
+              $ref: '#/components/schemas/Amount'
+            noqodiOrderId:
+              type: string
+              format: uuid
+            customerReferenceId:
+              type: string
+            transactionDate:
+              type: string
+              description: "Format: 'dd-MM-yyyy HH:mm:ss'."
+            transactions:
+              type: array
+              items:
+                type: object
+                properties:
+                  merchantReferenceId:
+                    type: string
+                  noqodiReferenceId:
+                    type: string
+                  noqodiRefundReferenceId:
+                    type: string
+                  merchantCode:
+                    type: string
+                  transactionAmount:
+                    $ref: '#/components/schemas/Amount'
+                  beneficiaries:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/Beneficiary'
+                  releaseFundStatus:
+                    type: object
+                    description: "For BKT refunds only."
+                    properties:
+                      releaseFunds:
+                        type: object
+                        properties:
+                          code:
+                            type: string
+                          description:
+                            type: string
+                          releaseAmount:
+                            type: string
+                          releaseAmountCurrency:
+                            type: string
+                          bankReferenceNo:
+                            type: string
+        statusinfo:
+          $ref: '#/components/schemas/StatusInfoSuccess'

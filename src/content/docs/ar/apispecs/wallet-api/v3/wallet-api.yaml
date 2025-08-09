@@ -1,0 +1,187 @@
+openapi: 3.0.3
+info:
+  title: واجهة برمجة تطبيقات المحفظة
+  description: |
+    توفر واجهة برمجة تطبيقات المحفظة وظائف شاملة لإدارة المحفظة لمنصة نقودي.
+    يشمل ذلك استعلامات الرصيد وتاريخ المعاملات وتحويل الأموال وتكوين المحفظة.
+    
+    ### الميزات
+    - تتبع الرصيد في الوقت الفعلي
+    - تاريخ المعاملات مع التصفية
+    - تحويلات آمنة للأموال
+    - دعم العملات المتعددة
+    - إدارة إعدادات المحفظة
+  version: 2.0.3
+  contact:
+    name: دعم واجهة برمجة تطبيقات نقودي
+    email: api-support@noqodi.com
+
+servers:
+  - url: https://api.noqodi.com/v2
+    description: خادم الإنتاج
+  - url: https://api-staging.noqodi.com/v2
+    description: خادم التطوير
+
+security:
+  - bearerAuth: []
+
+paths:
+  /wallet/balance:
+    get:
+      operationId: getWalletBalance
+      summary: الحصول على رصيد المحفظة
+      description: |
+        استرداد الرصيد الحالي لمحفظة المستخدم المصدق عليه.
+        يعيد معلومات الرصيد لجميع العملات المدعومة.
+        
+        ### الاستخدام
+        يتم استدعاء هذه النقطة النهائية عادة لعرض الرصيد الحالي في واجهة المستخدم
+        أو قبل إجراء المعاملات للتأكد من وجود أموال كافية.
+      tags:
+        - المحفظة
+        - الرصيد
+      responses:
+        '200':
+          description: تم استرداد رصيد المحفظة بنجاح
+          content:
+            application/json:
+              example:
+                success: true
+                data:
+                  primary_currency: "AED"
+                  balances:
+                    - currency: "AED"
+                      available: 1500.50
+                      pending: 25.00
+                      total: 1525.50
+                    - currency: "USD"
+                      available: 408.20
+                      pending: 0.00
+                      total: 408.20
+
+  /wallet/transactions:
+    get:
+      operationId: getWalletTransactions
+      summary: الحصول على تاريخ المعاملات
+      description: |
+        استرداد تاريخ المعاملات المقسم على صفحات لمحفظة المستخدم المصدق عليه.
+        يدعم التصفية حسب نطاق التاريخ ونوع المعاملة والحالة.
+        
+        ### خيارات التصفية
+        - **نطاق التاريخ**: تصفية المعاملات ضمن تواريخ محددة
+        - **نوع المعاملة**: تصفية حسب الإيداع والسحب والتحويل وغيرها
+        - **الحالة**: تصفية حسب المعاملات المكتملة والمعلقة والفاشلة
+        - **العملة**: تصفية حسب عملة محددة
+      tags:
+        - المحفظة
+        - المعاملات
+      parameters:
+        - name: page
+          in: query
+          description: رقم الصفحة للتصفح
+          required: false
+          schema:
+            type: integer
+            minimum: 1
+            default: 1
+        - name: limit
+          in: query
+          description: عدد المعاملات في كل صفحة
+          required: false
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 100
+            default: 20
+      responses:
+        '200':
+          description: تم استرداد تاريخ المعاملات بنجاح
+
+  /wallet/transfer:
+    post:
+      operationId: createWalletTransfer
+      summary: تحويل الأموال بين المحافظ
+      description: |
+        تحويل الأموال من محفظة المستخدم المصدق عليه إلى محفظة أخرى.
+        يدعم كلاً من التحويلات الداخلية (داخل نقودي) والتحويلات الخارجية.
+        
+        ### أنواع التحويل
+        - **داخلي**: التحويل إلى محفظة نقودي أخرى باستخدام البريد الإلكتروني أو الهاتف
+        - **خارجي**: التحويل إلى حساب مصرفي خارجي أو طريقة دفع
+        
+        ### ميزات الأمان
+        - حدود المعاملات بناءً على مستوى التحقق من المستخدم
+        - كشف الاحتيال في الوقت الفعلي
+        - المصادقة الثنائية للمبالغ الكبيرة
+      tags:
+        - المحفظة
+        - التحويل
+      requestBody:
+        required: true
+        content:
+          application/json:
+            example:
+              recipient: "recipient@example.com"
+              amount: 100.50
+              currency: "AED"
+              description: "دفع مقابل الخدمات"
+              reference: "INV-2024-001"
+      responses:
+        '201':
+          description: تم البدء في التحويل بنجاح
+
+  /wallet/settings:
+    get:
+      operationId: getWalletSettings
+      summary: الحصول على إعدادات المحفظة
+      description: |
+        استرداد تكوين المحفظة الحالي والتفضيلات للمستخدم المصدق عليه.
+        
+        ### تشمل الإعدادات
+        - تفضيل العملة الافتراضية
+        - حدود المعاملات
+        - تفضيلات الإشعارات
+        - إعدادات الأمان
+      tags:
+        - المحفظة
+        - الإعدادات
+      responses:
+        '200':
+          description: تم استرداد إعدادات المحفظة بنجاح
+
+    put:
+      operationId: updateWalletSettings
+      summary: تحديث إعدادات المحفظة
+      description: |
+        تحديث تكوين المحفظة والتفضيلات.
+        سيتم تحديث الحقول المقدمة فقط؛ البقية تبقى كما هي.
+        
+        ### الإعدادات القابلة للتحديث
+        - العملة الافتراضية (يجب أن تكون عملة مدعومة)
+        - تفضيلات الإشعارات
+        - إعدادات الأمان (مع التحقق المناسب)
+      tags:
+        - المحفظة
+        - الإعدادات
+      responses:
+        '200':
+          description: تم تحديث الإعدادات بنجاح
+
+components:
+  securitySchemes:
+    bearerAuth:
+      type: httpinfo
+      scheme: bearer
+      bearerFormat: JWT
+
+tags:
+  - name: المحفظة
+    description: عمليات المحفظة الأساسية
+  - name: الرصيد
+    description: عمليات استعلام الرصيد
+  - name: المعاملات
+    description: تاريخ وإدارة المعاملات
+  - name: التحويل
+    description: عمليات تحويل الأموال
+  - name: الإعدادات
+    description: تكوين المحفظة والتفضيلات
