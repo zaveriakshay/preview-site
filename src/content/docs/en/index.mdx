@@ -1,0 +1,36 @@
+---
+title: Welcome to noqodiDocs
+template: doc
+---
+import '../../../styles/homepage.css';
+import HomepageCard from '../../../components/HomepageCard.astro';
+import HomepageBackground from '../../../components/HomepageBackground.astro';
+
+<div class="homepage-hero">
+    <HomepageBackground />
+    <h1>Documentation</h1>
+    <p class="tagline">Explore our guides and examples to integrate noqodi.</p>
+</div>
+
+<div class="homepage-cards">
+    <div class="homepage-card-grid">
+        <HomepageCard 
+            title="Web Guides" 
+            icon="document"
+            description="Step-by-step tutorials for our web-based platform and integrations."
+            href="/en/guides/web/v2"
+        />
+        <HomepageCard 
+            title="Mobile Guides" 
+            icon="setting"
+            description="Detailed guides for our mobile applications and SDKs."
+            href="/en/guides/mobile/v2"
+        />
+        <HomepageCard 
+            title="Changelog" 
+            icon="history"
+            description="Stay up-to-date with the latest changes and improvements."
+            href="/en/changelogs"
+        />
+    </div>
+</div>
