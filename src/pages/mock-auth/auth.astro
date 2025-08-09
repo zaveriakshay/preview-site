@@ -1,0 +1,427 @@
+---
+import Layout from '../../layouts/Layout.astro';
+import { authConfigManager } from '../../utils/auth-config.ts';
+
+const authConfig = await authConfigManager.loadConfig();
+
+// Only enable mock auth in local environment
+if (authConfig.environment !== 'local') {
+    return Astro.redirect('/');
+}
+
+const urlParams = new URL(Astro.request.url).searchParams;
+const clientId = urlParams.get('client_id');
+const redirectUri = urlParams.get('redirect_uri');
+const state = urlParams.get('state');
+const scope = urlParams.get('scope');
+const responseType = urlParams.get('response_type');
+const nonce = urlParams.get('nonce');
+const uiLocales = urlParams.get('ui_locales') || 'en';
+
+if (!clientId || !redirectUri || !state) {
+    return Astro.redirect('/?error=invalid_request');
+}
+
+const mockUsers = [
+    {
+        id: '1',
+        username: 'john.doe',
+        email: 'john.doe@noqodi.com',
+        name: 'John Doe',
+        roles: ['PAYMENT_USER', 'API_CONSUMER', 'MEMBER'],
+        avatar: 'JD',
+        description: 'Standard user with basic permissions'
+    },
+    {
+        id: '2',
+        username: 'jane.admin',
+        email: 'jane.admin@noqodi.com',
+        name: 'Jane Admin',
+        roles: ['PAYMENT_USER', 'PAYMENT_CREATE', 'PAYMENT_REFUND', 'MERCHANT_ADMIN', 'ENTERPRISE_USER', 'ADMIN'],
+        avatar: 'JA',
+        description: 'Admin user with full permissions'
+    },
+    {
+        id: '3',
+        username: 'test.user',
+        email: 'test.user@example.com',
+        name: 'Test User',
+        roles: ['MEMBER'],
+        avatar: 'TU',
+        description: 'Basic member with minimal permissions'
+    },
+    {
+        id: '4',
+        username: 'merchant.user',
+        email: 'merchant@business.com',
+        name: 'Merchant User',
+        roles: ['MERCHANT_USER', 'PAYMENT_USER', 'API_CONSUMER'],
+        avatar: 'MU',
+        description: 'Merchant user with business permissions'
+    },
+    {
+        id: 'fail',
+        username: 'fail.test',
+        email: 'fail@example.com',
+        name: 'Authentication Failure Test',
+        roles: ['MEMBER'],
+        avatar: '❌',
+        description: 'Test authentication failure scenario',
+        isTest: true
+    },
+    {
+        id: 'expired',
+        username: 'expired.test',
+        email: 'expired@example.com',
+        name: 'Expired Code Test',
+        roles: ['MEMBER'],
+        avatar: '⏰',
+        description: 'Test expired authorization code scenario',
+        isTest: true
+    }
+];
+---
+
+<Layout title="Mock Authentication - noqodi Docs">
+    <main class="mock-auth-page">
+        <div class="auth-container">
+            <div class="auth-header">
+                <div class="auth-logo">
+                    <img src="/assets/logo.svg" alt="noqodi" />
+                    <h1>noqodi</h1>
+                    <span class="mock-badge">MOCK AUTH</span>
+                </div>
+                <h2>Sign in to noqodi Documentation</h2>
+                <p>This is a mock authentication service for local development</p>
+            </div>
+
+            <div class="auth-users">
+                <h3>Select a test user to sign in as:</h3>
+                <div class="user-grid">
+                    {mockUsers.map(user => (
+                        <div class={`user-card ${user.isTest ? 'test-user' : ''}`} data-user-id={user.id}>
+                            <div class={`user-avatar ${user.isTest ? 'test-avatar' : ''}`}>{user.avatar}</div>
+                            <div class="user-info">
+                                <div class="user-name">{user.name} {user.isTest && <span class="test-badge">TEST</span>}</div>
+                                <div class="user-email">{user.email}</div>
+                                <div class="user-description">{user.description}</div>
+                                <div class="user-roles">
+                                    {user.roles.slice(0, 2).map(role => (
+                                        <span class="role-badge">{role}</span>
+                                    ))}
+                                    {user.roles.length > 2 && (
+                                        <span class="role-badge more">+{user.roles.length - 2}</span>
+                                    )}
+                                </div>
+                            </div>
+                            <button class={`signin-btn ${user.isTest ? 'test-btn' : ''}`} data-user-id={user.id}>
+                                {user.isTest ? `Test ${user.id === 'fail' ? 'Failure' : 'Expired Code'}` : `Sign in as ${user.username}`}
+                            </button>
+                        </div>
+                    ))}
+                </div>
+            </div>
+
+            <div class="auth-footer">
+                <p>
+                    <strong>Development Note:</strong> This mock authentication service simulates
+                    Keycloak IAM for local development. In production, users will be redirected
+                    to the actual noqodi IAM service.
+                </p>
+                <a href="/" class="back-link">← Back to Documentation</a>
+            </div>
+        </div>
+
+        <form id="auth-form" method="GET" style="display: none;">
+            <input type="hidden" name="code" id="auth-code" />
+            <input type="hidden" name="state" value={state} />
+            <input type="hidden" name="session_state" id="session-state" />
+        </form>
+    </main>
+</Layout>
+
+<script define:vars={{ redirectUri, state, nonce }}>
+document.addEventListener('DOMContentLoaded', () => {
+    const signInButtons = document.querySelectorAll('.signin-btn');
+    const authForm = document.getElementById('auth-form');
+    const authCodeInput = document.getElementById('auth-code');
+    const sessionStateInput = document.getElementById('session-state');
+    
+    signInButtons.forEach(button => {
+        button.addEventListener('click', (e) => {
+            const userId = e.target.dataset.userId;
+            
+            // Generate mock authorization code
+            const authCode = `mock-auth-code-${userId}`;
+            const sessionState = Math.random().toString(36).substring(2);
+            
+            // Set form values
+            authForm.action = redirectUri;
+            authCodeInput.value = authCode;
+            sessionStateInput.value = sessionState;
+            
+            console.log('Mock authentication - signing in user:', userId);
+            console.log('Redirecting to:', redirectUri);
+            
+            // Submit form to redirect back to app
+            authForm.submit();
+        });
+    });
+});
+</script>
+
+<style>
+    .mock-auth-page {
+        min-height: 100vh;
+        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        padding: 2rem;
+    }
+
+    .auth-container {
+        background: white;
+        border-radius: 16px;
+        box-shadow: 0 20px 40px rgba(0, 0, 0, 0.1);
+        padding: 2rem;
+        max-width: 800px;
+        width: 100%;
+        margin: 0 auto;
+    }
+
+    .auth-header {
+        text-align: center;
+        margin-bottom: 2rem;
+        padding-bottom: 2rem;
+        border-bottom: 1px solid #e2e8f0;
+    }
+
+    .auth-logo {
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        gap: 12px;
+        margin-bottom: 1rem;
+    }
+
+    .auth-logo img {
+        width: 40px;
+        height: 40px;
+    }
+
+    .auth-logo h1 {
+        font-size: 2rem;
+        font-weight: 700;
+        color: #1e293b;
+        margin: 0;
+    }
+
+    .mock-badge {
+        background: #f59e0b;
+        color: white;
+        padding: 4px 8px;
+        border-radius: 4px;
+        font-size: 0.75rem;
+        font-weight: 600;
+        letter-spacing: 0.05em;
+    }
+
+    .auth-header h2 {
+        color: #1e293b;
+        font-size: 1.5rem;
+        font-weight: 600;
+        margin: 0 0 0.5rem 0;
+    }
+
+    .auth-header p {
+        color: #64748b;
+        font-size: 1rem;
+        margin: 0;
+    }
+
+    .auth-users h3 {
+        color: #1e293b;
+        font-size: 1.25rem;
+        font-weight: 600;
+        margin-bottom: 1.5rem;
+        text-align: center;
+    }
+
+    .user-grid {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+        gap: 1.5rem;
+        margin-bottom: 2rem;
+    }
+
+    .user-card {
+        border: 1px solid #e2e8f0;
+        border-radius: 12px;
+        padding: 1.5rem;
+        transition: all 0.15s ease;
+        background: #f8fafc;
+    }
+
+    .user-card:hover {
+        border-color: #635bff;
+        box-shadow: 0 4px 12px rgba(99, 91, 255, 0.15);
+        background: white;
+    }
+
+    .user-avatar {
+        width: 48px;
+        height: 48px;
+        border-radius: 50%;
+        background: #635bff;
+        color: white;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        font-weight: 600;
+        font-size: 1.125rem;
+        margin-bottom: 1rem;
+    }
+
+    .user-name {
+        font-weight: 600;
+        color: #1e293b;
+        font-size: 1.125rem;
+        margin-bottom: 0.25rem;
+    }
+
+    .user-email {
+        color: #64748b;
+        font-size: 0.875rem;
+        margin-bottom: 1rem;
+    }
+
+    .user-roles {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 0.5rem;
+        margin-bottom: 1.5rem;
+    }
+
+    .role-badge {
+        background: #f1f5f9;
+        color: #475569;
+        padding: 0.25rem 0.5rem;
+        border-radius: 4px;
+        font-size: 0.75rem;
+        font-weight: 500;
+        border: 1px solid #e2e8f0;
+    }
+
+    .role-badge.more {
+        background: #635bff;
+        color: white;
+        border-color: #635bff;
+    }
+
+    .signin-btn {
+        width: 100%;
+        background: #635bff;
+        color: white;
+        border: none;
+        padding: 12px 24px;
+        border-radius: 8px;
+        font-size: 0.875rem;
+        font-weight: 500;
+        cursor: pointer;
+        transition: all 0.15s ease;
+    }
+
+    .signin-btn:hover {
+        background: #5a52ff;
+        transform: translateY(-1px);
+        box-shadow: 0 4px 12px rgba(99, 91, 255, 0.25);
+    }
+
+    .user-description {
+        color: #64748b;
+        font-size: 0.8rem;
+        margin-bottom: 0.75rem;
+        font-style: italic;
+    }
+
+    .test-badge {
+        background: #f59e0b;
+        color: white;
+        padding: 2px 6px;
+        border-radius: 3px;
+        font-size: 0.6rem;
+        font-weight: 600;
+        margin-left: 0.5rem;
+    }
+
+    .test-avatar {
+        background: #dc2626 !important;
+        font-size: 1rem;
+    }
+
+    .test-user {
+        border-color: #fbbf24;
+        background: #fffbeb;
+    }
+
+    .test-user:hover {
+        border-color: #f59e0b;
+        box-shadow: 0 4px 12px rgba(245, 158, 11, 0.25);
+        background: #fef3c7;
+    }
+
+    .test-btn {
+        background: #dc2626;
+        font-size: 0.8rem;
+    }
+
+    .test-btn:hover {
+        background: #b91c1c;
+        box-shadow: 0 4px 12px rgba(220, 38, 38, 0.25);
+    }
+
+    .auth-footer {
+        text-align: center;
+        padding-top: 2rem;
+        border-top: 1px solid #e2e8f0;
+    }
+
+    .auth-footer p {
+        color: #64748b;
+        font-size: 0.875rem;
+        margin-bottom: 1rem;
+        line-height: 1.5;
+    }
+
+    .back-link {
+        color: #635bff;
+        text-decoration: none;
+        font-weight: 500;
+        transition: color 0.15s ease;
+    }
+
+    .back-link:hover {
+        color: #5a52ff;
+    }
+
+    @media (max-width: 768px) {
+        .auth-container {
+            margin: 1rem;
+            padding: 1.5rem;
+        }
+
+        .user-grid {
+            grid-template-columns: 1fr;
+        }
+        
+        .auth-logo {
+            flex-direction: column;
+            gap: 8px;
+        }
+        
+        .auth-logo h1 {
+            font-size: 1.5rem;
+        }
+    }
+</style>

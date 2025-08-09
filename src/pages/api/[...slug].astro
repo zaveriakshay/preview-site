@@ -1,0 +1,63 @@
+---
+// API documentation pages with version and language support
+import Layout from '../../layouts/Layout.astro';
+import RapiDocApi from '../../components/RapiDocApi.astro';
+import { loadAllSimpleApiSpecs } from '../../utils/simple-openapi-loader.ts';
+
+export async function getStaticPaths() {
+    console.log('[API Pages] Generating static paths...');
+    
+    const specs = await loadAllSimpleApiSpecs();
+    const paths = [];
+    
+    // Generate paths for each spec
+    specs.forEach(spec => {
+        // Main API page
+        paths.push({
+            params: { slug: spec.id },
+            props: { spec }
+        });
+        
+        // Operation pages (optional)
+        spec.operations.forEach(op => {
+            paths.push({
+                params: { slug: `${spec.id}/${op.operationId}` },
+                props: { spec, operation: op }
+            });
+        });
+    });
+    
+    console.log(`[API Pages] Generated ${paths.length} paths`);
+    return paths;
+}
+
+const { slug } = Astro.params;
+const { spec, operation } = Astro.props;
+
+// Get version and language from URL params
+const urlParams = new URL(Astro.request.url).searchParams;
+const requestedLang = urlParams.get('lang') || spec?.language || 'en';
+const requestedVersion = urlParams.get('version') || spec?.folderVersion || 'v3';
+
+// Extract service name from slug
+const serviceName = slug?.split('/')[0] || spec?.id || 'unknown';
+
+console.log(`[API Page] Rendering: ${serviceName}, lang: ${requestedLang}, version: ${requestedVersion}`);
+---
+
+<Layout title={`${serviceName} API Documentation`} lang={requestedLang}>
+    <div class="api-documentation">
+        <RapiDocApi 
+            specUrl={`/apispecs/${serviceName}.yaml?lang=${requestedLang}&version=${requestedVersion}`}
+            language={requestedLang}
+        />
+    </div>
+</Layout>
+
+<style>
+    .api-documentation {
+        width: 100%;
+        height: 100%;
+        overflow: hidden;
+    }
+</style>

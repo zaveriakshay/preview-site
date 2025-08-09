@@ -1,0 +1,563 @@
+---
+import Layout from '../../../layouts/Layout.astro';
+import { 
+    getChangelogEntries, 
+    getChangelogStats, 
+    getChangelogTags,
+    getChangelogVersions,
+    formatChangelogDate,
+    getTypeLabel,
+    getCategoryLabel,
+    type ChangelogEntry
+} from '../../../utils/changelog.ts';
+
+export const prerender = true;
+
+export async function getStaticPaths() {
+    return [
+        { params: { lang: 'en' } },
+        { params: { lang: 'ar' } }
+    ];
+}
+
+const { lang } = Astro.params;
+const language = lang || 'en';
+
+// Get changelog data with error handling
+let entries: ChangelogEntry[] = [];
+let stats = { total: 0, byType: {}, byCategory: {} };
+let tags: string[] = [];
+let versions: string[] = [];
+
+try {
+    entries = await getChangelogEntries(language);
+    stats = await getChangelogStats(language);
+    tags = await getChangelogTags(language);
+    versions = await getChangelogVersions(language);
+} catch (error) {
+    console.error('Error loading changelog data:', error);
+    // Continue with empty data rather than crashing
+}
+
+// Group entries by month for better organization
+const groupedEntries = entries.reduce((groups, entry) => {
+    const date = new Date(entry.date);
+    const key = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}`;
+    if (!groups[key]) {
+        groups[key] = [];
+    }
+    groups[key].push(entry);
+    return groups;
+}, {} as Record<string, ChangelogEntry[]>);
+
+const sortedGroups = Object.keys(groupedEntries)
+    .sort((a, b) => b.localeCompare(a))
+    .slice(0, 12); // Show last 12 months
+
+const isRTL = language === 'ar';
+---
+
+<Layout title={language === 'ar' ? 'سجل التغييرات' : 'Change Logs'}>
+    <main class="changelog-page" dir={isRTL ? 'rtl' : 'ltr'}>
+        <div class="changelog-container">
+            <!-- Header Section -->
+            <header class="changelog-header">
+                <div class="header-content">
+                    <div class="stats-grid">
+                        <div class="stat-card">
+                            <div class="stat-number">{stats.total}</div>
+                            <div class="stat-label">{language === 'ar' ? 'إجمالي التحديثات' : 'Total Updates'}</div>
+                        </div>
+                        <div class="stat-card">
+                            <div class="stat-number">{stats.recentCount}</div>
+                            <div class="stat-label">{language === 'ar' ? 'آخر 30 يوماً' : 'Last 30 Days'}</div>
+                        </div>
+                        <div class="stat-card">
+                            <div class="stat-number">{Object.keys(stats.byType).length}</div>
+                            <div class="stat-label">{language === 'ar' ? 'أنواع المكونات' : 'Component Types'}</div>
+                        </div>
+                    </div>
+                </div>
+            </header>
+
+            <!-- Filters Section -->
+            <section class="changelog-filters">
+                <div class="filter-group">
+                    <label>{language === 'ar' ? 'فلترة حسب النوع:' : 'Filter by type:'}</label>
+                    <div class="filter-buttons">
+                        <button class="filter-btn active" data-filter="all">
+                            {language === 'ar' ? 'الكل' : 'All'}
+                        </button>
+                        {Object.keys(stats.byType).map(type => (
+                            <button class="filter-btn" data-filter={`type:${type}`}>
+                                {getTypeLabel(type, language)} ({stats.byType[type]})
+                            </button>
+                        ))}
+                    </div>
+                </div>
+
+                <div class="filter-group">
+                    <label>{language === 'ar' ? 'فلترة حسب الفئة:' : 'Filter by category:'}</label>
+                    <div class="filter-buttons">
+                        {Object.keys(stats.byCategory).map(category => (
+                            <button class="filter-btn" data-filter={`category:${category}`}>
+                                {getCategoryLabel(category, language)} ({stats.byCategory[category]})
+                            </button>
+                        ))}
+                    </div>
+                </div>
+            </section>
+
+            <!-- Changelog Entries -->
+            <section class="changelog-entries">
+                {sortedGroups.map(groupKey => {
+                    const [year, month] = groupKey.split('-');
+                    const monthName = new Date(parseInt(year), parseInt(month) - 1).toLocaleDateString(
+                        language === 'ar' ? 'ar-AE' : 'en-US', 
+                        { month: 'long', year: 'numeric' }
+                    );
+                    
+                    return (
+                        <div class="changelog-group" data-group={groupKey}>
+                            <h2 class="group-title">{monthName}</h2>
+                            <div class="entries-list">
+                                {groupedEntries[groupKey].map(entry => (
+                                    <article 
+                                        class="changelog-entry" 
+                                        data-type={entry.type} 
+                                        data-category={entry.category}
+                                        data-tags={entry.tags.join(',')}
+                                    >
+                                        <div class="entry-header">
+                                            <div class="entry-meta">
+                                                <span class={`type-badge type-${entry.type}`}>
+                                                    {getTypeLabel(entry.type, language)}
+                                                </span>
+                                                <span class={`category-badge category-${entry.category}`}>
+                                                    {getCategoryLabel(entry.category, language)}
+                                                </span>
+                                                {entry.version && (
+                                                    <span class="version-badge">
+                                                        v{entry.version}
+                                                    </span>
+                                                )}
+                                            </div>
+                                            <time class="entry-date" datetime={entry.date}>
+                                                {formatChangelogDate(entry.date, language)}
+                                            </time>
+                                        </div>
+                                        
+                                        <h3 class="entry-title">
+                                            <a href={`/${language}/changelogs/${entry.slug}`}>
+                                                {entry.title}
+                                            </a>
+                                        </h3>
+                                        
+                                        {entry.excerpt && (
+                                            <p class="entry-excerpt">{entry.excerpt}</p>
+                                        )}
+                                        
+                                        <div class="entry-footer">
+                                            <span class="entry-author">
+                                                {language === 'ar' ? 'بواسطة' : 'by'} {entry.author}
+                                            </span>
+                                            {entry.tags.length > 0 && (
+                                                <div class="entry-tags">
+                                                    {entry.tags.slice(0, 3).map(tag => (
+                                                        <span class="tag">{tag}</span>
+                                                    ))}
+                                                    {entry.tags.length > 3 && (
+                                                        <span class="tag-more">+{entry.tags.length - 3}</span>
+                                                    )}
+                                                </div>
+                                            )}
+                                        </div>
+                                    </article>
+                                ))}
+                            </div>
+                        </div>
+                    );
+                })}
+            </section>
+
+            {entries.length === 0 && (
+                <div class="empty-state">
+                    <div class="empty-icon">📝</div>
+                    <h3>{language === 'ar' ? 'لا توجد سجلات تغيير' : 'No changelog entries found'}</h3>
+                    <p>{language === 'ar' ? 'سيتم إضافة سجلات التغيير هنا عند توفرها.' : 'Changelog entries will appear here when available.'}</p>
+                </div>
+            )}
+        </div>
+    </main>
+</Layout>
+
+<script>
+document.addEventListener('DOMContentLoaded', () => {
+    const filterButtons = document.querySelectorAll('.filter-btn');
+    const entries = document.querySelectorAll('.changelog-entry');
+    const groups = document.querySelectorAll('.changelog-group');
+    
+    filterButtons.forEach(button => {
+        button.addEventListener('click', () => {
+            // Remove active class from all buttons
+            filterButtons.forEach(btn => btn.classList.remove('active'));
+            // Add active class to clicked button
+            button.classList.add('active');
+            
+            const filter = button.dataset.filter;
+            
+            // Show all entries if filter is "all"
+            if (filter === 'all') {
+                entries.forEach(entry => entry.style.display = 'block');
+                groups.forEach(group => {
+                    const visibleEntries = group.querySelectorAll('.changelog-entry[style*="block"], .changelog-entry:not([style])');
+                    group.style.display = visibleEntries.length > 0 ? 'block' : 'none';
+                });
+                return;
+            }
+            
+            // Parse filter (e.g., "type:api" or "category:release")
+            const [filterType, filterValue] = filter.split(':');
+            
+            entries.forEach(entry => {
+                const shouldShow = entry.dataset[filterType] === filterValue;
+                entry.style.display = shouldShow ? 'block' : 'none';
+            });
+            
+            // Hide empty groups
+            groups.forEach(group => {
+                const visibleEntries = group.querySelectorAll('.changelog-entry[style*="block"]');
+                group.style.display = visibleEntries.length > 0 ? 'block' : 'none';
+            });
+        });
+    });
+});
+</script>
+
+<style>
+    .changelog-page {
+        min-height: 100vh;
+        background: #fafbfc;
+        padding: 2rem 0;
+    }
+
+    .changelog-container {
+        max-width: 1200px;
+        margin: 0 auto;
+        padding: 0 2rem;
+    }
+
+    .changelog-header {
+        text-align: center;
+        margin-bottom: 3rem;
+        padding: 3rem 0;
+        background: linear-gradient(white, white 0%, #0d6eba 100%);
+        border-radius: 16px;
+        color: white;
+        margin-top: 1rem;
+    }
+
+    .header-content h1 {
+        font-size: 3rem;
+        font-weight: 700;
+        margin-bottom: 1rem;
+        text-shadow: 0 2px 4px rgba(0, 0, 0, 0.2);
+    }
+
+    .header-content p {
+        font-size: 1.25rem;
+        opacity: 0.9;
+        margin-bottom: 2rem;
+        max-width: 600px;
+        margin-left: auto;
+        margin-right: auto;
+    }
+
+    .stats-grid {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+        gap: 2rem;
+        max-width: 600px;
+        margin: 0 auto;
+    }
+
+    .stat-card {
+        background: rgba(255, 255, 255, 0.1);
+        padding: 1.5rem;
+        border-radius: 12px;
+        backdrop-filter: blur(10px);
+        border: 1px solid rgba(255, 255, 255, 0.2);
+    }
+
+    .stat-number {
+        font-size: 2.5rem;
+        font-weight: 700;
+        margin-bottom: 0.5rem;
+    }
+
+    .stat-label {
+        font-size: 0.875rem;
+        opacity: 0.8;
+        text-transform: uppercase;
+        letter-spacing: 0.05em;
+    }
+
+    .changelog-filters {
+        background: white;
+        padding: 2rem;
+        border-radius: 12px;
+        box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08);
+        margin-bottom: 2rem;
+    }
+
+    .filter-group {
+        margin-bottom: 1.5rem;
+    }
+
+    .filter-group:last-child {
+        margin-bottom: 0;
+    }
+
+    .filter-group label {
+        display: block;
+        font-weight: 600;
+        color: #374151;
+        margin-bottom: 0.75rem;
+    }
+
+    .filter-buttons {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 0.5rem;
+    }
+
+    .filter-btn {
+        background: #f3f4f6;
+        border: 1px solid #d1d5db;
+        padding: 0.5rem 1rem;
+        border-radius: 6px;
+        font-size: 0.875rem;
+        cursor: pointer;
+        transition: all 0.15s ease;
+        color: #374151;
+    }
+
+    .filter-btn:hover {
+        background: #e5e7eb;
+        border-color: #9ca3af;
+    }
+
+    .filter-btn.active {
+        background: #635bff;
+        color: white;
+        border-color: #635bff;
+    }
+
+    .changelog-group {
+        margin-bottom: 3rem;
+    }
+
+    .group-title {
+        font-size: 1.5rem;
+        font-weight: 600;
+        color: #1f2937;
+        margin-bottom: 1.5rem;
+        padding-bottom: 0.5rem;
+        border-bottom: 2px solid #e5e7eb;
+    }
+
+    .entries-list {
+        display: grid;
+        gap: 1.5rem;
+    }
+
+    .changelog-entry {
+        background: white;
+        padding: 2rem;
+        border-radius: 12px;
+        box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08);
+        border: 1px solid #e5e7eb;
+        transition: all 0.15s ease;
+    }
+
+    .changelog-entry:hover {
+        box-shadow: 0 4px 16px rgba(0, 0, 0, 0.12);
+        transform: translateY(-2px);
+    }
+
+    .entry-header {
+        display: flex;
+        justify-content: space-between;
+        align-items: flex-start;
+        margin-bottom: 1rem;
+        gap: 1rem;
+    }
+
+    .entry-meta {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 0.5rem;
+    }
+
+    .type-badge, .category-badge, .version-badge {
+        padding: 0.25rem 0.75rem;
+        border-radius: 4px;
+        font-size: 0.75rem;
+        font-weight: 600;
+        text-transform: uppercase;
+        letter-spacing: 0.05em;
+    }
+
+    .type-platform { background: #dbeafe; color: #1e40af; }
+    .type-api { background: #dcfce7; color: #166534; }
+    .type-sdk { background: #fef3c7; color: #92400e; }
+    .type-documentation { background: #ede9fe; color: #6b21a8; }
+
+    .category-release { background: #f3f4f6; color: #374151; }
+    .category-major-release { background: #fee2e2; color: #dc2626; }
+    .category-update { background: #dbeafe; color: #2563eb; }
+    .category-hotfix { background: #fed7d7; color: #c53030; }
+
+    .version-badge {
+        background: #f59e0b;
+        color: white;
+    }
+
+    .entry-date {
+        color: #6b7280;
+        font-size: 0.875rem;
+        white-space: nowrap;
+    }
+
+    .entry-title {
+        font-size: 1.5rem;
+        font-weight: 600;
+        margin-bottom: 1rem;
+        line-height: 1.3;
+    }
+
+    .entry-title a {
+        color: #1f2937;
+        text-decoration: none;
+        transition: color 0.15s ease;
+    }
+
+    .entry-title a:hover {
+        color: #635bff;
+    }
+
+    .entry-excerpt {
+        color: #6b7280;
+        line-height: 1.6;
+        margin-bottom: 1.5rem;
+    }
+
+    .entry-footer {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        gap: 1rem;
+        padding-top: 1rem;
+        border-top: 1px solid #f3f4f6;
+    }
+
+    .entry-author {
+        color: #6b7280;
+        font-size: 0.875rem;
+    }
+
+    .entry-tags {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 0.25rem;
+    }
+
+    .tag {
+        background: #f3f4f6;
+        color: #374151;
+        padding: 0.125rem 0.5rem;
+        border-radius: 4px;
+        font-size: 0.75rem;
+    }
+
+    .tag-more {
+        background: #6b7280;
+        color: white;
+        padding: 0.125rem 0.5rem;
+        border-radius: 4px;
+        font-size: 0.75rem;
+    }
+
+    .empty-state {
+        text-align: center;
+        padding: 4rem 2rem;
+        color: #6b7280;
+    }
+
+    .empty-icon {
+        font-size: 4rem;
+        margin-bottom: 1rem;
+    }
+
+    .empty-state h3 {
+        font-size: 1.5rem;
+        margin-bottom: 1rem;
+        color: #374151;
+    }
+
+    /* RTL Styles */
+    [dir="rtl"] .entry-header {
+        flex-direction: row-reverse;
+    }
+
+    [dir="rtl"] .entry-meta {
+        flex-direction: row-reverse;
+    }
+
+    [dir="rtl"] .entry-footer {
+        flex-direction: row-reverse;
+    }
+
+    [dir="rtl"] .filter-buttons {
+        flex-direction: row-reverse;
+    }
+
+    /* Responsive Design */
+    @media (max-width: 768px) {
+        .changelog-container {
+            padding: 0 1rem;
+        }
+
+        .header-content h1 {
+            font-size: 2rem;
+        }
+
+        .stats-grid {
+            grid-template-columns: 1fr;
+            gap: 1rem;
+        }
+
+        .entry-header {
+            flex-direction: column;
+            align-items: flex-start;
+        }
+
+        .entry-footer {
+            flex-direction: column;
+            align-items: flex-start;
+            gap: 0.75rem;
+        }
+
+        .filter-buttons {
+            flex-direction: column;
+        }
+
+        .filter-btn {
+            text-align: left;
+        }
+
+        [dir="rtl"] .filter-btn {
+            text-align: right;
+        }
+    }
+</style>
